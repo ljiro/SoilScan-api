@@ -1,10 +1,11 @@
+import json
 import numpy as np
 from PIL import Image
-from tensorflow.keras.models import load_model
-import tensorflow as tf
-# Preprocess image - assuming this function is fixed
-from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
 from fastapi import FastAPI, UploadFile, File
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+import traceback
+import io
 
 # For patching if needed
 try:
