@@ -2899,7 +2899,7 @@ class MunsellClassifier:{
 }
     
 
-# ✅ Load model
+# ✅ Define the classifier
 class MunsellClassifier:
     def __init__(self, model_path):
         self.model = load_model(model_path)
@@ -2946,17 +2946,18 @@ class MunsellClassifier:
 # ✅ Instantiate classifier
 classifier = MunsellClassifier("munsell_classifier.keras")
 
-# ✅ API function
-def predict_image(file):
-    return classifier.predict(file)
+# ✅ Create FastAPI app
+app = FastAPI()
 
-# ✅ API-only Gradio interface
-app = gr.Interface(
-    fn=predict_image,
-    inputs=gr.File(file_types=["image"]),
-    outputs=gr.JSON(),
-    live=False
-)
+@app.get("/")
+def root():
+    return {"status": "soil color classifier ready"}
 
-if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+@app.post("/predict")
+async def predict_image(file: UploadFile = File(...)):
+    try:
+        file_data = await file.read()
+        result = classifier.predict(io.BytesIO(file_data))
+        return result
+    except Exception as e:
+        return {"error": str(e)}
