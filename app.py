@@ -2929,28 +2929,21 @@ class MunsellClassifier:
             top_index = np.argmax(preds)
             print(f"DEBUG: Top Prediction Index: {top_index}")
 
-            if top_index < len(self.class_names):
-                munsell_code = self.class_names[top_index]
-                color_data = MUNSELL_COLORS.get(munsell_code, {})
-                result = {
-                    "munsell_code": munsell_code,
-                    "color_name": color_data.get('name', 'Unknown'),
-                    "hex_color": color_data.get('hex', '#FFFFFF'),
-                    "confidence": float(preds[top_index]),
-                    "description": color_data.get('description', 'No description available'),
-                    "properties": color_data.get('properties', []),
-                }
+            munsell_code = self.class_names[top_index]
+            color_data = MUNSELL_COLORS.get(munsell_code, {})
+            result = {
+                "munsell_code": munsell_code,
+                "color_name": color_data.get('name', 'Unknown'),
+                "hex_color": color_data.get('hex', '#FFFFFF'),
+                "confidence": float(preds[top_index]),
+                "description": color_data.get('description', 'No description available'),
+                "properties": color_data.get('properties', []),
+            }
 
-                return {
-                    "predictions": [result],  # Maintain array format for consistency
-                    "primary_prediction": result
-                }
-            else:
-                return {
-                    "error": "Invalid prediction index",
-                    "predictions": [],
-                    "primary_prediction": None
-                }
+            return {
+                "predictions": [result],  # Maintain array format for consistency
+                "primary_prediction": result
+            }
 
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
