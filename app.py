@@ -2937,7 +2937,8 @@ class MunsellClassifier:
                         "description": color_data.get('description', 'No description available'),
                         "properties": color_data.get('properties', []),
                     })
-
+                        
+            print("API REP",  result)            
             return {
                 "predictions": results,
                 "primary_prediction": results[0] if results else None
