@@ -2906,54 +2906,250 @@ class MunsellClassifier:{
 class MunsellClassifier:
     def __init__(self, model_path):
         self.model = load_model(model_path)
-        self.input_shape = self.model.input_shape[1:3]
+       
+        # Verify the actual input shape from the model
+        self.input_shape = self.model.input_shape[1:3]  # Gets (height, width)
+        print(f"Model expects input shape: {self.input_shape}")
+       
         self.class_names = list(MUNSELL_COLORS.keys())
 
+
+    def preprocess_single_image_for_resnet50_prediction(self, image_path, config):
+        """
+        Loads and preprocesses a single image to be compatible with the trained
+        ResNet50-based model.
+        Assumes images were resized, then patched, then patches fed to ResNet50.
+        """
+        try:
+            # --- 1. Load Image ---
+            img = Image.open(image_path).convert('RGB')
+            original_size = img.size
+            print(f"Original image size: {original_size}")
+
+
+            # --- 2. Initial Resize (to the size before patching, if applicable) ---
+            initial_resize_h, initial_resize_w, _ = config.get('input_shape', (256, 256, 3)) # Default if not in config
+            img_resized_for_patching = img.resize((initial_resize_w, initial_resize_h))
+            print(f"Resized for patching to: {img_resized_for_patching.size}")
+            img_array_for_patching = np.array(img_resized_for_patching, dtype=np.uint8)
+
+
+            # --- 3. Extract Patch(es) ---
+            patch_size_h = config['patch_size']
+            patch_size_w = config['patch_size']
+            patch_to_process = None # Initialize
+
+
+            if img_array_for_patching.shape[0] < patch_size_h or img_array_for_patching.shape[1] < patch_size_w:
+                print(f"Warning: Image resized for patching ({img_array_for_patching.shape[0]}x{img_array_for_patching.shape[1]}) "
+                    f"is smaller than patch_size ({patch_size_h}x{patch_size_w}).")
+                print("Attempting to resize the initially resized image directly to patch_size.")
+                patch_to_process_pil = img_resized_for_patching.resize((patch_size_w, patch_size_h))
+                patch_to_process = np.array(patch_to_process_pil, dtype=np.float32)
+            else:
+                if patchify and config.get('use_patching_for_prediction', True):
+                    print(f"Extracting patches of size {patch_size_h}x{patch_size_w}...")
+                    step = config.get('patch_step', patch_size_h // 2)
+                    patches = patchify.patchify(img_array_for_patching, (patch_size_h, patch_size_w, 3), step=step)
+                    center_y = patches.shape[0] // 2
+                    center_x = patches.shape[1] // 2
+                    extracted_patch_uint8 = patches[center_y, center_x, 0, :, :, :]
+                    patch_to_process = extracted_patch_uint8.astype(np.float32)
+                    print(f"Extracted central patch of size: {patch_to_process.shape}")
+                else:
+                    print(f"Taking a center crop of size {patch_size_h}x{patch_size_w}...")
+                    left = (img_array_for_patching.shape[1] - patch_size_w) // 2
+                    top = (img_array_for_patching.shape[0] - patch_size_h) // 2
+                    right = left + patch_size_w
+                    bottom = top + patch_size_h
+                    center_cropped_patch_uint8 = img_array_for_patching[top:bottom, left:right, :]
+                    patch_to_process = center_cropped_patch_uint8.astype(np.float32)
+                    print(f"Center cropped patch size: {patch_to_process.shape}")
+
+
+            # --- 4. Apply ResNet50-Specific Preprocessing ---
+            preprocessed_patch = resnet50_preprocess_input(patch_to_process.copy()) # Use .copy() to avoid issues with read-only arrays
+            print(f"Patch preprocessed for ResNet50. Shape: {preprocessed_patch.shape}, Min: {preprocessed_patch.min():.2f}, Max: {preprocessed_patch.max():.2f}")
+
+
+            # --- 5. Add Batch Dimension ---
+            batch_patch = np.expand_dims(preprocessed_patch, axis=0)
+            print(f"Final batch shape for model: {batch_patch.shape}")
+
+
+            return batch_patch
+
+
+        except FileNotFoundError:
+            print(f"❌ Error: Image file not found at {image_path}")
+            return None
+        except Exception as e:
+            print(f"❌ Error during preprocessing for ResNet50: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+
+
+
+    def predict_on_image_resnet50(self, image_path, config, class_names_list):
+        """Loads a saved ResNet50-based model, preprocesses an image, makes a prediction,
+        and returns the results as JSON."""
+        try:
+            # Load model
+            # model = tf.keras.models.load_model(model_path, compile=False)
+           
+            # --- Preprocess Image ---
+            processed_image_batch = self.preprocess_single_image_for_resnet50_prediction(image_path, config)
+            # --- Make Prediction ---
+            try:
+                print("\nMaking prediction...")
+                predictions_proba = self.model.predict(processed_image_batch)
+
+
+                predicted_class_index = np.argmax(predictions_proba[0])
+                predicted_class_probability = np.max(predictions_proba[0])
+                predicted_class_name = "N/A"
+
+
+                if 0 <= predicted_class_index < len(class_names_list):
+                    predicted_class_name = class_names_list[predicted_class_index]
+                    print(f"\n✅ Predicted Class: {predicted_class_name}")
+                    print(f"   Confidence: {predicted_class_probability:.4f}")
+                else:
+                    print(f"⚠️ Error: Predicted class index ({predicted_class_index}) is out of bounds for class_names (len: {len(class_names_list)}).")
+                    print(f"   This usually means the loaded class_names_list is incorrect or too short.")
+                    print(f"   Raw probabilities (first 10): {predictions_proba[0][:10]}...")
+
+
+                top_n = min(5, len(class_names_list) if len(class_names_list) > 0 else 1)
+                top_n_indices = np.argsort(predictions_proba[0])[-top_n:][::-1]
+                print(f"\nTop {top_n} predictions:")
+                for i in top_n_indices:
+                    if 0 <= i < len(class_names_list):
+                        print(f"  - {class_names_list[i]}: {predictions_proba[0][i]:.4f}")
+                    else:
+                        print(f"  - Index {i} (out of bounds for class_names_list): {predictions_proba[0][i]:.4f}")
+
+
+            except Exception as e:
+                print(f"❌ Error during prediction: {e}")
+                import traceback
+                traceback.print_exc()
+           
+            results = []
+            for idx in top_n_indices:
+                if 0 <= idx < len(class_names_list):
+                    munsell_code = class_names_list[idx]
+                    confidence = float(predictions_proba[0][idx])                    
+
+
+                    # Try to get color info if available
+                    color_data = MUNSELL_COLORS.get(munsell_code, {})
+                   
+                    results.append({
+                        "munsell_code": munsell_code,
+                        "color_name": color_data.get('name', f"Unknown Color {munsell_code}"),
+                        "hex_color": color_data.get('hex', '#AAAAAA'),
+                        "confidence": confidence,
+                        "description": color_data.get('description', 'No description available for this color code.'),
+                        "properties": color_data.get('properties', []),
+                    })
+           
+            if not results:
+                return {"error": "No valid predictions generated"}
+               
+            return {
+                "predictions": results,
+                "primary_prediction": results[0]
+            }
+           
+        except Exception as e:
+            import traceback
+            return {"error": str(e), "traceback": traceback.format_exc()}
+   
     def preprocess_image(self, image):
+        """Process image to match model's expected input"""
         if image.mode != 'RGB':
             image = image.convert('RGB')
+        # Resize to model's expected dimensions
         image = image.resize(self.input_shape)
-        return np.array(image) / 255.0
-
+        img_array = np.array(image) / 255.0  # Normalize to [0,1]
+        return img_array
+   
     def predict(self, file_obj):
         try:
+            print("DEBUG: Starting prediction...")
             image = Image.open(file_obj)
+            print(f"DEBUG: Image opened successfully, format: {image.format}, mode: {image.mode}, size: {image.size}")
+           
             img_array = self.preprocess_image(image)
+            print(f"DEBUG: Image preprocessed, shape: {img_array.shape}")
+           
             img_array = np.expand_dims(img_array, axis=0)
+            print(f"DEBUG: Added batch dimension: {img_array.shape}")
+           
+            print("DEBUG: Running model prediction...")
             preds = self.model.predict(img_array)[0]
-
-            # Get the index of the highest confidence prediction
-            top_index = np.argmax(preds)
-            confidence = float(preds[top_index])
-
-            print(f"DEBUG: Highest Confidence Index: {top_index}")
-            print(f"DEBUG: Highest Confidence Value: {confidence}")
-
-#            if top_index < len(self.class_names):
-            munsell_code = self.class_names[top_index]
-            color_data = MUNSELL_COLORS.get(munsell_code, {})
-            result = {
-                "munsell_code": munsell_code,
-                "color_name": color_data.get('name', 'Unknown'),
-                "hex_color": color_data.get('hex', '#FFFFFF'),
-                "confidence": confidence,
-                "description": color_data.get('description', 'No description available'),
-                "properties": color_data.get('properties', []),
-            }
-
+            print(f"DEBUG: Prediction complete, output shape: {preds.shape}")
+            print(f"DEBUG: Top 3 prediction values: {sorted(preds, reverse=True)[:3]}")
+           
+            # Check if there's a mismatch
+            # if preds.shape[0] != len(self.class_names):
+            #     return {"error": f"Model output dimension ({preds.shape[0]}) doesn't match number of classes ({len(self.class_names)})"}
+           
+            top_indices = np.argsort(-preds)[:min(5, len(preds))]
+            print(f"DEBUG: Top indices: {top_indices}")
+            print(f"DEBUG: Class names available: {len(self.class_names)}")
+           
+            results = []
+            for idx in top_indices:
+                # Ensure index is valid
+                if idx < len(self.class_names):
+                    munsell_code = self.class_names[idx]
+                    color_data = MUNSELL_COLORS.get(munsell_code, {})
+                    results.append({
+                        "munsell_code": munsell_code,
+                        "color_name": color_data.get('name', 'Unknown'),
+                        "hex_color": color_data.get('hex', '#FFFFFF'),
+                        "confidence": float(preds[idx]),
+                        "description": color_data.get('description', 'No description available'),
+                        "properties": color_data.get('properties', []),
+                    })
+           
+            # Check if results is empty
+            if not results:
+                return {"error": "No valid predictions generated"}
+               
             return {
-                "predictions": [result],
-                "primary_prediction": result
+                "predictions": results,
+                "primary_prediction": results[0]
             }
-
-            return {
-                "error": "Invalid prediction index",
-                "predictions": [],
-                "primary_prediction": None
-            }
-
         except Exception as e:
+            import traceback
             return {"error": str(e), "traceback": traceback.format_exc()}
+       
+
+
+def temp(file):
+    try:
+        # Save the uploaded file temporarily
+        temp_path = file.name
+        print(f"DEBUG: Saving uploaded file to {temp_path}")
+
+
+        # Call your predict method with the required parameters
+        result = classifier.predict_on_image_resnet50(
+            temp_path,
+            config_for_resnet50_prediction,
+            class_names_for_resnet50_prediction
+        )
+       
+        # Return the results in the expected format
+        return result
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 # ✅ Instantiate classifier
 classifier = MunsellClassifier("munsell_classifier.keras")
@@ -2969,7 +3165,53 @@ def root():
 async def predict_image(file: UploadFile = File(...)):
     try:
         file_data = await file.read()
-        result = classifier.predict(io.BytesIO(file_data))
+        result = temp(io.BytesIO(file_data))
         return result
     except Exception as e:
         return {"error": str(e)}
+
+
+config_for_resnet50_prediction = {
+    'input_shape': (150, 150, 3),
+    'patch_size': 100,
+    'patch_step': 50,
+    'use_patching_for_prediction': True,
+}
+
+class_names_npy_path = "class_info.npy"
+
+
+class_names_for_resnet50_prediction = []
+num_classes_from_file_load = 0
+
+
+loaded_data = np.load(class_names_npy_path, allow_pickle=True)
+print(f"DEBUG: 0-D array: {loaded_data}")
+
+
+# --- MODIFIED LOGIC TO HANDLE 0-D ARRAY CONTAINING A DICTIONARY ---
+if loaded_data.ndim == 0 and isinstance(loaded_data.item(), dict):
+    print(f"✓ Loaded a 0-D array containing a dictionary from '{class_names_npy_path}'.")
+    data_dict = loaded_data.item()
+    if 'class_names' in data_dict and isinstance(data_dict['class_names'], list):
+        class_names_for_resnet50_prediction = [str(name) for name in data_dict['class_names']]
+        print(f"  Extracted 'class_names' list with {len(class_names_for_resnet50_prediction)} items.")
+    else:
+        print(f"  ⚠️ Dictionary in .npy file does not contain a 'class_names' key with a list value.")
+elif loaded_data.ndim == 1:
+    print(f"✓ Loaded a 1-D array from '{class_names_npy_path}'.")
+    class_names_for_resnet50_prediction = list(map(str, loaded_data))
+else:
+    print(f"⚠️ Loaded an array with unexpected dimensions (shape: {loaded_data.shape}) from '{class_names_npy_path}'. Expected 0-D with dict or 1-D array.")
+# --- END OF MODIFIED LOGIC ---
+
+
+if not class_names_for_resnet50_prediction:
+    print(f"⚠️ Class names list is empty after processing '{class_names_npy_path}'.")
+else:
+    num_classes_from_file_load = len(class_names_for_resnet50_prediction)
+    print(f"✓ Successfully processed {num_classes_from_file_load} class names.")
+
+
+if __name__ == "__main__":
+    print("TEST")
