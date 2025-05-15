@@ -2921,20 +2921,16 @@ class MunsellClassifier:
             img_array = self.preprocess_image(image)
             img_array = np.expand_dims(img_array, axis=0)
             preds = self.model.predict(img_array)[0]
-            print(f"DEBUG: Predictions: {preds}")
 
-            # Reverse the predictions array and get first index
-            reversed_preds = preds[::-1]
-            first_index = 0  # First index of reversed array
-            confidence = float(reversed_preds[first_index])
+            # Get the index of the highest confidence prediction
+            top_index = np.argmax(preds)
+            confidence = float(preds[top_index])
 
-            print(f"DEBUG: Reversed First Index Confidence: {confidence}")
+            print(f"DEBUG: Highest Confidence Index: {top_index}")
+            print(f"DEBUG: Highest Confidence Value: {confidence}")
 
-            # Get the original index from reversed array
-            original_index = len(preds) - 1 - first_index
-
-            if original_index < len(self.class_names):
-                munsell_code = self.class_names[original_index]
+            if top_index < len(self.class_names):
+                munsell_code = self.class_names[top_index]
                 color_data = MUNSELL_COLORS.get(munsell_code, {})
                 result = {
                     "munsell_code": munsell_code,
@@ -2951,7 +2947,7 @@ class MunsellClassifier:
                 }
 
             return {
-                "error": "Invalid index calculation",
+                "error": "Invalid prediction index",
                 "predictions": [],
                 "primary_prediction": None
             }
