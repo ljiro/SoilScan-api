@@ -2938,7 +2938,7 @@ class MunsellClassifier:
                         "properties": color_data.get('properties', []),
                     })
                         
-            print("API REP",  result)            
+            print("API REP",  results)            
             return {
                 "predictions": results,
                 "primary_prediction": results[0] if results else None
