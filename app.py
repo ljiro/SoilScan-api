@@ -3165,7 +3165,7 @@ def root():
 async def predict_image(file: UploadFile = File(...)):
     try:
         file_data = await file.read()
-        result = temp(io.BytesIO(file_data))
+        result = temp(file_data)
         return result
     except Exception as e:
         return {"error": str(e)}
