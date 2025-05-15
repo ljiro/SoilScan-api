@@ -2923,26 +2923,37 @@ class MunsellClassifier:
             preds = self.model.predict(img_array)[0]
             print(f"DEBUG: Predictions: {preds}")
 
-            print(f"DEBUG: Top 3 Prediction: {sorted(preds, reverse=True)[:3]}")
+            # Reverse the predictions array and get first index
+            reversed_preds = preds[::-1]
+            first_index = 0  # First index of reversed array
+            confidence = float(reversed_preds[first_index])
 
-            # Get the index of the highest confidence prediction
-            top_index = np.argmax(preds)
-            print(f"DEBUG: Top Prediction Index: {top_index}")
+            print(f"DEBUG: Reversed First Index Confidence: {confidence}")
 
-            munsell_code = self.class_names[top_index]
-            color_data = MUNSELL_COLORS.get(munsell_code, {})
-            result = {
-                "munsell_code": munsell_code,
-                "color_name": color_data.get('name', 'Unknown'),
-                "hex_color": color_data.get('hex', '#FFFFFF'),
-                "confidence": float(preds[top_index]),
-                "description": color_data.get('description', 'No description available'),
-                "properties": color_data.get('properties', []),
-            }
+            # Get the original index from reversed array
+            original_index = len(preds) - 1 - first_index
+
+            if original_index < len(self.class_names):
+                munsell_code = self.class_names[original_index]
+                color_data = MUNSELL_COLORS.get(munsell_code, {})
+                result = {
+                    "munsell_code": munsell_code,
+                    "color_name": color_data.get('name', 'Unknown'),
+                    "hex_color": color_data.get('hex', '#FFFFFF'),
+                    "confidence": confidence,
+                    "description": color_data.get('description', 'No description available'),
+                    "properties": color_data.get('properties', []),
+                }
+
+                return {
+                    "predictions": [result],
+                    "primary_prediction": result
+                }
 
             return {
-                "predictions": [result],  # Maintain array format for consistency
-                "primary_prediction": result
+                "error": "Invalid index calculation",
+                "predictions": [],
+                "primary_prediction": None
             }
 
         except Exception as e:
