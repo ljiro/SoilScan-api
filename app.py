@@ -3213,3 +3213,5 @@ async def predict_image(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": str(e)}
 
+if __name__ == "__main__":
+  print("TEST")
