@@ -2922,29 +2922,35 @@ class MunsellClassifier:
             img_array = np.expand_dims(img_array, axis=0)
             preds = self.model.predict(img_array)[0]
             print(f"DEBUG: Predictions: {preds}")
-            
+
             print(f"DEBUG: Top 3 Prediction: {sorted(preds, reverse=True)[:3]}")
 
-            top_indices = np.argsort(-preds)[:min(5, len(preds))]
-            print(f"DEBUG: Top Predictions: {top_indices}")
-            results = []
+            # Get the index of the highest confidence prediction
+            top_index = np.argmax(preds)
+            print(f"DEBUG: Top Prediction Index: {top_index}")
 
-            for idx in top_indices:
-                if idx < len(self.class_names):
-                    munsell_code = self.class_names[idx]
-                    color_data = MUNSELL_COLORS.get(munsell_code, {})
-                    results.append({
-                        "munsell_code": munsell_code,
-                        "color_name": color_data.get('name', 'Unknown'),
-                        "hex_color": color_data.get('hex', '#FFFFFF'),
-                        "confidence": float(preds[idx]),
-                        "description": color_data.get('description', 'No description available'),
-                        "properties": color_data.get('properties', []),
-                    })       
-            return {
-                "predictions": results,
-                "primary_prediction": results[0] if results else None
-            }
+            if top_index < len(self.class_names):
+                munsell_code = self.class_names[top_index]
+                color_data = MUNSELL_COLORS.get(munsell_code, {})
+                result = {
+                    "munsell_code": munsell_code,
+                    "color_name": color_data.get('name', 'Unknown'),
+                    "hex_color": color_data.get('hex', '#FFFFFF'),
+                    "confidence": float(preds[top_index]),
+                    "description": color_data.get('description', 'No description available'),
+                    "properties": color_data.get('properties', []),
+                }
+
+                return {
+                    "predictions": [result],  # Maintain array format for consistency
+                    "primary_prediction": result
+                }
+            else:
+                return {
+                    "error": "Invalid prediction index",
+                    "predictions": [],
+                    "primary_prediction": None
+                }
 
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
