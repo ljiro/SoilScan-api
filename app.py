@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 import traceback
 import io
+from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
 
 # For patching if needed
 try:
@@ -2902,7 +2903,24 @@ class MunsellClassifier:{
 }
     
 
-# ✅ Define the classifier
+# ✅ Instantiate classifier
+classifier = MunsellClassifier("munsell_classifier.keras")
+
+# ✅ Create FastAPI app
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"status": "soil color classifier ready"}
+
+@app.post("/predict")
+async def predict_image(file: UploadFile = File(...)):
+    try:
+        result = temp(file)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
 class MunsellClassifier:
     def __init__(self, model_path):
         self.model = load_model(model_path)
@@ -3151,25 +3169,6 @@ def temp(file):
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
 
-# ✅ Instantiate classifier
-classifier = MunsellClassifier("munsell_classifier.keras")
-
-# ✅ Create FastAPI app
-app = FastAPI()
-
-@app.get("/")
-def root():
-    return {"status": "soil color classifier ready"}
-
-@app.post("/predict")
-async def predict_image(file: UploadFile = File(...)):
-    try:
-        file_data = await file.read()
-        result = temp(file_data)
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
 
 config_for_resnet50_prediction = {
     'input_shape': (150, 150, 3),
@@ -3177,6 +3176,7 @@ config_for_resnet50_prediction = {
     'patch_step': 50,
     'use_patching_for_prediction': True,
 }
+
 
 class_names_npy_path = "class_info.npy"
 
@@ -3211,7 +3211,3 @@ if not class_names_for_resnet50_prediction:
 else:
     num_classes_from_file_load = len(class_names_for_resnet50_prediction)
     print(f"✓ Successfully processed {num_classes_from_file_load} class names.")
-
-
-if __name__ == "__main__":
-    print("TEST")
