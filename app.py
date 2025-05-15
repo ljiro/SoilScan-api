@@ -2901,25 +2901,6 @@ class MunsellClassifier:{
     "properties": ["Light Yellowish Color", "Low Organic Matter", "Common in some loess or light-colored parent materials"]
   }
 }
-    
-
-# ✅ Instantiate classifier
-classifier = MunsellClassifier("munsell_classifier.keras")
-
-# ✅ Create FastAPI app
-app = FastAPI()
-
-@app.get("/")
-def root():
-    return {"status": "soil color classifier ready"}
-
-@app.post("/predict")
-async def predict_image(file: UploadFile = File(...)):
-    try:
-        result = temp(file)
-        return result
-    except Exception as e:
-        return {"error": str(e)}
 
 class MunsellClassifier:
     def __init__(self, model_path):
@@ -3211,3 +3192,24 @@ if not class_names_for_resnet50_prediction:
 else:
     num_classes_from_file_load = len(class_names_for_resnet50_prediction)
     print(f"✓ Successfully processed {num_classes_from_file_load} class names.")
+
+    
+
+# ✅ Instantiate classifier
+classifier = MunsellClassifier("munsell_classifier.keras")
+
+# ✅ Create FastAPI app
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"status": "soil color classifier ready"}
+
+@app.post("/predict")
+async def predict_image(file: UploadFile = File(...)):
+    try:
+        result = temp(file)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
