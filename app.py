@@ -2929,22 +2929,22 @@ class MunsellClassifier:
             print(f"DEBUG: Highest Confidence Index: {top_index}")
             print(f"DEBUG: Highest Confidence Value: {confidence}")
 
-            if top_index < len(self.class_names):
-                munsell_code = self.class_names[top_index]
-                color_data = MUNSELL_COLORS.get(munsell_code, {})
-                result = {
-                    "munsell_code": munsell_code,
-                    "color_name": color_data.get('name', 'Unknown'),
-                    "hex_color": color_data.get('hex', '#FFFFFF'),
-                    "confidence": confidence,
-                    "description": color_data.get('description', 'No description available'),
-                    "properties": color_data.get('properties', []),
-                }
+#            if top_index < len(self.class_names):
+            munsell_code = self.class_names[top_index]
+            color_data = MUNSELL_COLORS.get(munsell_code, {})
+            result = {
+                "munsell_code": munsell_code,
+                "color_name": color_data.get('name', 'Unknown'),
+                "hex_color": color_data.get('hex', '#FFFFFF'),
+                "confidence": confidence,
+                "description": color_data.get('description', 'No description available'),
+                "properties": color_data.get('properties', []),
+            }
 
-                return {
-                    "predictions": [result],
-                    "primary_prediction": result
-                }
+            return {
+                "predictions": [result],
+                "primary_prediction": result
+            }
 
             return {
                 "error": "Invalid prediction index",
