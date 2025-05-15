@@ -2921,8 +2921,12 @@ class MunsellClassifier:
             img_array = self.preprocess_image(image)
             img_array = np.expand_dims(img_array, axis=0)
             preds = self.model.predict(img_array)[0]
+            print(f"DEBUG: Predictions: {preds}")
+            
+            print(f"DEBUG: Top 3 Prediction: {sorted(preds, reverse-True),[:3]}")
 
             top_indices = np.argsort(-preds)[:min(5, len(preds))]
+            print(f"DEBUG: Top Predictions: {top_indices}")
             results = []
 
             for idx in top_indices:
