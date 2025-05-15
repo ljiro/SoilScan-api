@@ -2901,6 +2901,7 @@ class MunsellClassifier:{
   }
 }
     
+
 # ✅ Define the classifier
 class MunsellClassifier:
     def __init__(self, model_path):
@@ -2921,22 +2922,25 @@ class MunsellClassifier:
             img_array = np.expand_dims(img_array, axis=0)
             preds = self.model.predict(img_array)[0]
 
-            top_idx = int(np.argmax(preds))
-            top_confidence = float(preds[top_idx])
+            top_indices = np.argsort(-preds)[:min(5, len(preds))]
+            results = []
 
-            munsell_code = self.class_names[top_idx]
-            color_data = MUNSELL_COLORS.get(munsell_code, {})
-
-            top_prediction = {
-                "munsell_code": munsell_code,
-                "color_name": color_data.get('name', 'Unknown'),
-                "hex_color": color_data.get('hex', '#FFFFFF'),
-                "confidence": top_confidence,
-                "description": color_data.get('description', 'No description available'),
-                "properties": color_data.get('properties', []),
+            for idx in top_indices:
+                if idx < len(self.class_names):
+                    munsell_code = self.class_names[idx]
+                    color_data = MUNSELL_COLORS.get(munsell_code, {})
+                    results.append({
+                        "munsell_code": munsell_code,
+                        "color_name": color_data.get('name', 'Unknown'),
+                        "hex_color": color_data.get('hex', '#FFFFFF'),
+                        "confidence": float(preds[idx]),
+                        "description": color_data.get('description', 'No description available'),
+                        "properties": color_data.get('properties', []),
+                    })       
+            return {
+                "predictions": results,
+                "primary_prediction": results[0] if results else None
             }
-
-            return top_prediction
 
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -2958,4 +2962,4 @@ async def predict_image(file: UploadFile = File(...)):
         result = classifier.predict(io.BytesIO(file_data))
         return result
     except Exception as e:
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        return {"error": str(e)}
