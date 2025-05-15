@@ -4,6 +4,7 @@ from tensorflow.keras.models import load_model
 import tensorflow as tf
 # Preprocess image - assuming this function is fixed
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
+from fastapi import FastAPI
 # For patching if needed
 try:
     import patchify
