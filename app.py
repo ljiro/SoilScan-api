@@ -2936,9 +2936,7 @@ class MunsellClassifier:
                         "confidence": float(preds[idx]),
                         "description": color_data.get('description', 'No description available'),
                         "properties": color_data.get('properties', []),
-                    })
-                        
-            print("API REP",  results)            
+                    })       
             return {
                 "predictions": results,
                 "primary_prediction": results[0] if results else None
