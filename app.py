@@ -1,5 +1,4 @@
-import gradio as gr
-import numpy as np
+zimport numpy as np
 from PIL import Image
 from tensorflow.keras.models import load_model
 import tensorflow as tf
