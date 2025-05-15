@@ -2923,7 +2923,7 @@ class MunsellClassifier:
             preds = self.model.predict(img_array)[0]
             print(f"DEBUG: Predictions: {preds}")
             
-            print(f"DEBUG: Top 3 Prediction: {sorted(preds, reverse-True),[:3]}")
+            print(f"DEBUG: Top 3 Prediction: {sorted(preds, reverse=True),[:3]}")
 
             top_indices = np.argsort(-preds)[:min(5, len(preds))]
             print(f"DEBUG: Top Predictions: {top_indices}")
