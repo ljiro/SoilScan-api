@@ -2924,7 +2924,7 @@ class MunsellClassifier:{
 # Load your Random Forest model
 rf_model = joblib.load("random_forest_model.pkl")
 xgb_model = joblib.load("xgboost_model.pkl")
-scaler = joblib.load("sclaer.pkl")
+scaler = joblib.load("scaler.pkl")
 
 class MunsellClassifier:
     def __init__(self, model_path):
