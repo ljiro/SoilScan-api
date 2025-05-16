@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile 
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File
@@ -7,8 +9,7 @@ from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
-import os
-import tempfile 
+
 
 # For patching if needed
 try:
@@ -3130,7 +3131,6 @@ class MunsellClassifier:
             import traceback
             return {"error": str(e), "traceback": traceback.format_exc()}
        
-
 
 
 
