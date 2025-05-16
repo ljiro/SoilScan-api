@@ -4,6 +4,6 @@ WORKDIR /app
 COPY . .
 
 RUN pip install --upgrade pip
-RUN pip install fastapi uvicorn tensorflow pillow numpy python-multipart pydantic joblib scikit-learn pandas
+RUN pip install fastapi uvicorn tensorflow pillow numpy python-multipart pydantic joblib scikit-learn pandas xgboost
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
