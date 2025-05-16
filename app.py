@@ -3258,6 +3258,8 @@ async def predict_crop(data: CropInput):
         # Build response with top crops
         top_indices = proba.argsort()[-5:][::-1]
         predictions = []
+        
+        print("predictions: ", predictions)
         for idx in top_indices:
             predictions.append({
                 "crop_name": CROP_CLASSES[idx],
