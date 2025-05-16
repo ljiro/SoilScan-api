@@ -7,6 +7,7 @@ from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
+import os 
 
 # For patching if needed
 try:
@@ -3130,27 +3131,42 @@ class MunsellClassifier:
        
 
 
-def temp(file):
+
+
+async def temp(file: UploadFile):
+    temp_path = None  # Initialize temp_path outside the with block
     try:
-        # Save the uploaded file temporarily
-        temp_path = file.name
-        print(f"DEBUG: Saving uploaded file to {temp_path}")
+        # Create a temporary file to save the uploaded content
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp_file:
+            contents = await file.read()  # Now 'await' is valid here
+            await tmp_file.awrite(contents)  # Use await for async write
+            temp_path = tmp_file.name  # Get the path to the temporary file
 
+        print(f"DEBUG: Saved uploaded file to temporary location: {temp_path}")
 
-        # Call your predict method with the required parameters
+        # Call your predict method with the path to the temporary file
         result = classifier.predict_on_image_resnet50(
             temp_path,
             config_for_resnet50_prediction,
             class_names_for_resnet50_prediction
         )
-       
-        # Return the results in the expected format
+
+        # Clean up the temporary file
+        os.remove(temp_path)
+        print(f"DEBUG: Removed temporary file: {temp_path}")
+
+        # Return the results
         return result
     except Exception as e:
         import traceback
+        if temp_path:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                print(f"DEBUG: Cleaned up temporary file due to error: {temp_path}")
         return {"error": str(e), "traceback": traceback.format_exc()}
-
-
+      
+      
+      
 config_for_resnet50_prediction = {
     'input_shape': (150, 150, 3),
     'patch_size': 100,
@@ -3208,7 +3224,7 @@ def root():
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
     try:
-        result = temp(file)
+        result = await temp(file)  # Now you need to 'await' the call to temp
         return result
     except Exception as e:
         return {"error": str(e)}
