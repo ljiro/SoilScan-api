@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile 
+import pandas as pd
 import sklearn
 from pydantic import BaseModel
 import joblib  # for RandomForest model loading
@@ -2917,13 +2918,13 @@ class MunsellClassifier:{
   }
 }
 
-CROP_CLASSES = [
-    "rice", "wheat", "corn", "cotton", "soybean", "barley", "potato", "tomato"
-]
+
 
 
 # Load your Random Forest model
 rf_model = joblib.load("random_forest_model.pkl")
+xgb_model = joblib.load("xgboost_model.pkl")
+scaler = joblib.load("sclaer.pkl")
 
 class MunsellClassifier:
     def __init__(self, model_path):
@@ -3242,35 +3243,40 @@ app = FastAPI()
 def root():
     return {"status": "soil color classifier ready"}
 
+crop_df = pd.read_csv("Crop_recommendation.csv")
+CROP_CLASSES = dict(enumerate(pd.Categorical(crop_df["label"]).categories))
+
 @app.post("/predict-crop")
 async def predict_crop(data: CropInput):
     try:
-        # Prepare input in the same order model was trained on
+        # Convert input to array
         features = [[
             data.N, data.P, data.K,
             data.temperature, data.humidity,
             data.ph, data.rainfall
         ]]
 
-        # Predict probabilities for all crops
-        proba = rf_model.predict_proba(features)[0]
+        # Scale input
+        scaled = scaler.transform(features)
 
-        # Build response with top crops
+        # Predict probabilities for all classes
+        proba = xgb_model.predict_proba(scaled)[0]
+
+        # Get top-5 predictions
         top_indices = proba.argsort()[-5:][::-1]
-        predictions = []
-        
-        print("predictions: ", predictions)
-        for idx in top_indices:
-            predictions.append({
-                "crop_name": CROP_CLASSES[idx],
-                "score": float(proba[idx])
-            })
+        predictions = [{
+            "crop_name": CROP_CLASSES.get(idx, "Unknown"),
+            "score": float(proba[idx])
+        } for idx in top_indices]
 
         return { "predictions": predictions }
 
     except Exception as e:
         import traceback
-        return { "error": str(e), "traceback": traceback.format_exc() }
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
       
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
