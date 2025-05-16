@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile 
+import sklearn
 from pydantic import BaseModel
 import joblib  # for RandomForest model loading
 import numpy as np
