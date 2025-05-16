@@ -19,6 +19,15 @@ try:
 except ImportError:
     patchify = None
 
+class CropInput(BaseModel):
+    N: float
+    P: float
+    K: float
+    temperature: float
+    humidity: float
+    ph: float
+    rainfall: float
+    
 # Munsell Color Reference Data
 MUNSELL_COLORS = {
   "5R 8/1": {
