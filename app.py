@@ -3140,7 +3140,7 @@ async def temp(file: UploadFile):
         # Create a temporary file to save the uploaded content
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp_file:
             contents = await file.read()  # Now 'await' is valid here
-            await tmp_file.awrite(contents)  # Use await for async write
+            tmp_file.write(contents)  # Use await for async write
             temp_path = tmp_file.name  # Get the path to the temporary file
 
         print(f"DEBUG: Saved uploaded file to temporary location: {temp_path}")
