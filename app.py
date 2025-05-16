@@ -7,7 +7,8 @@ from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
-import os 
+import os
+import tempfile 
 
 # For patching if needed
 try:
