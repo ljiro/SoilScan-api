@@ -1,6 +1,8 @@
 import json
 import os
 import tempfile 
+from pydantic import BaseModel
+import joblib  # for RandomForest model loading
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File
@@ -2905,6 +2907,14 @@ class MunsellClassifier:{
   }
 }
 
+CROP_CLASSES = [
+    "rice", "wheat", "corn", "cotton", "soybean", "barley", "potato", "tomato"
+]
+
+
+# Load your Random Forest model
+rf_model = joblib.load("random_forest_model.pkl")
+
 class MunsellClassifier:
     def __init__(self, model_path):
         self.model = load_model(model_path)
@@ -3222,6 +3232,34 @@ app = FastAPI()
 def root():
     return {"status": "soil color classifier ready"}
 
+@app.post("/predict-crop")
+async def predict_crop(data: CropInput):
+    try:
+        # Prepare input in the same order model was trained on
+        features = [[
+            data.N, data.P, data.K,
+            data.temperature, data.humidity,
+            data.ph, data.rainfall
+        ]]
+
+        # Predict probabilities for all crops
+        proba = rf_model.predict_proba(features)[0]
+
+        # Build response with top crops
+        top_indices = proba.argsort()[-5:][::-1]
+        predictions = []
+        for idx in top_indices:
+            predictions.append({
+                "crop_name": CROP_CLASSES[idx],
+                "score": float(proba[idx])
+            })
+
+        return { "predictions": predictions }
+
+    except Exception as e:
+        import traceback
+        return { "error": str(e), "traceback": traceback.format_exc() }
+      
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
     try:
