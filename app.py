@@ -14,8 +14,8 @@ from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
-from .models import load_model, transform
-from .schemas import PredictionResponse
+from models import load_model, transform
+from schemas import PredictionResponse
 
 
 # Load model at startup
@@ -2924,6 +2924,60 @@ class MunsellClassifier:{
   }
 }
 
+    
+# Add this dictionary at the top of your file with other constants
+SOIL_TEXTURE_INFO = {
+    'Alluvial': {
+        'description': 'Fertile soil deposited by rivers, rich in minerals',
+        'properties': ['High fertility', 'Good water retention', 'Suitable for most crops'],
+        'color': '#E1C16E'  # A representative color for alluvial soil
+    },
+    'Black': {
+        'description': 'Volcanic soil with high clay content, very fertile',
+        'properties': ['High moisture retention', 'Rich in calcium and magnesium', 'Cracks in dry weather'],
+        'color': '#3D3D3D'
+    },
+    'Cinder': {
+        'description': 'Porous volcanic soil with good drainage',
+        'properties': ['Low water retention', 'Good aeration', 'Suitable for drought-resistant plants'],
+        'color': '#6F6F6F'
+    },
+    'Clay': {
+        'description': 'Fine-grained soil with poor drainage',
+        'properties': ['High nutrient content', 'Slow drainage', 'Hard when dry, sticky when wet'],
+        'color': '#B66A50'
+    },
+    'Laterite': {
+        'description': 'Reddish soil rich in iron and aluminum',
+        'properties': ['Low fertility', 'Good for bricks', 'Common in tropical areas'],
+        'color': '#E97451'
+    },
+    'Loamy': {
+        'description': 'Balanced mixture of sand, silt, and clay',
+        'properties': ['Ideal for most plants', 'Good drainage and moisture retention', 'Easy to work with'],
+        'color': '#C19A6B'
+    },
+    'Peat': {
+        'description': 'Organic soil with high water content',
+        'properties': ['High acidity', 'Good water retention', 'Requires drainage for cultivation'],
+        'color': '#5F4B32'
+    },
+    'Red': {
+        'description': 'Soil rich in iron oxides',
+        'properties': ['Good drainage', 'Low fertility', 'Common in warm climates'],
+        'color': '#E35335'
+    },
+    'Sandy': {
+        'description': 'Coarse soil with large particles',
+        'properties': ['Fast drainage', 'Low nutrient retention', 'Easy to work with'],
+        'color': '#FAD5A5'
+    },
+    'Yellow': {
+        'description': 'Soil with iron oxide hydration',
+        'properties': ['Moderate fertility', 'Good drainage', 'Common in humid areas'],
+        'color': '#FFD700'
+    }
+}
 
 
 
@@ -3285,8 +3339,9 @@ async def predict_crop(data: CropInput):
         }
       
         
+# Then modify your predict_texture endpoint like this:
 @app.post("/predict_texture", response_model=PredictionResponse)
-async def predict(file: UploadFile = File(...)):
+async def predict_texture(file: UploadFile = File(...)):
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     
@@ -3307,11 +3362,21 @@ async def predict(file: UploadFile = File(...)):
         probs = model.rf_classifier.predict_proba(features)[0]
         confidence = float(probs[class_idx])
         
+        # Get additional info from our dictionary
+        texture_info = SOIL_TEXTURE_INFO.get(class_name, {})
+        
         return {
             "predicted_class": class_name,
             "confidence": confidence,
-            "all_confidences": {model.class_names[i]: float(probs[i]) 
-                              for i in range(len(model.class_names))}
+            "description": texture_info.get('description', 'No description available'),
+            "properties": texture_info.get('properties', []),
+            "color": texture_info.get('color', '#FFFFFF'),
+            "all_confidences": {
+                model.class_names[i]: {
+                    "score": float(probs[i]),
+                    "color": SOIL_TEXTURE_INFO.get(model.class_names[i], {}).get('color', '#FFFFFF')
+                } for i in range(len(model.class_names))
+            }
         }
         
     except Exception as e:
