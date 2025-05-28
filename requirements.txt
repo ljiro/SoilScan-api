@@ -3,3 +3,8 @@ uvicorn
 tensorflow>=2.11.0
 pillow
 numpy
+torch==2.0.1
+torchvision==0.15.2
+scikit-learn==1.2.2
+Pillow==9.5.0
+python-multipart==0.0.6

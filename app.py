@@ -7,13 +7,19 @@ from pydantic import BaseModel
 import joblib  # for RandomForest model loading
 import numpy as np
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
+from .models import load_model, transform
+from .schemas import PredictionResponse
 
+
+# Load model at startup
+model = load_model()
 
 # For patching if needed
 try:
@@ -3278,6 +3284,39 @@ async def predict_crop(data: CropInput):
             "traceback": traceback.format_exc()
         }
       
+        
+@app.post("/predict_texture", response_model=PredictionResponse)
+async def predict(file: UploadFile = File(...)):
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        # Read and process image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        tensor = transform(image).unsqueeze(0).to(model.device)
+        
+        # Predict
+        with torch.no_grad():
+            _, _, features = model(tensor)
+        features = features.cpu().numpy()
+        
+        # Get predictions
+        class_idx = model.rf_classifier.predict(features)[0]
+        class_name = model.class_names[class_idx]
+        probs = model.rf_classifier.predict_proba(features)[0]
+        confidence = float(probs[class_idx])
+        
+        return {
+            "predicted_class": class_name,
+            "confidence": confidence,
+            "all_confidences": {model.class_names[i]: float(probs[i]) 
+                              for i in range(len(model.class_names))}
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
     try:
