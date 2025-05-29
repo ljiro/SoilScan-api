@@ -1,0 +1,17 @@
+{
+    "predicted_class": "Loamy",
+    "confidence": 0.95,
+    "description": "Balanced mixture of sand, silt, and clay",
+    "properties": [
+        "Ideal for most plants",
+        "Good drainage and moisture retention",
+        "Easy to work with"
+    ],
+    "color": "#C19A6B",
+    "all_confidences": {
+        "Alluvial": {"score": 0.02, "color": "#E1C16E"},
+        "Black": {"score": 0.01, "color": "#3D3D3D"},
+        "Loamy": {"score": 0.95, "color": "#C19A6B"},
+        ...
+    }
+}
