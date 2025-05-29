@@ -20,6 +20,7 @@ class SoilTextureModel(nn.Module):
         )
         self.rf_features = nn.Linear(128, 64)
         self.classifier = nn.Linear(128, num_classes)
+        self.device = torch.device("cpu")  # Initialize with default devices
 
     def forward(self, x):
         features = self.resnet(x)
@@ -31,11 +32,16 @@ class SoilTextureModel(nn.Module):
 
 def load_soil_model(model_path='soil_model_state_dict.pth'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    
+    checkpoint = torch.load(model_path, map_location=device)
     
     model = SoilTextureModel(num_classes=checkpoint['num_classes'])
     model.load_state_dict(checkpoint['model_state_dict'])
     model.class_names = checkpoint['class_names']
+    
+    # Add device attribute to the model
+    model.device = device
+    
     model.eval()
     return model
 
