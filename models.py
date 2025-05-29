@@ -37,19 +37,27 @@ class SoilTextureModel(nn.Module):
 def load_soil_model(model_path='soil_model_state_dict.pth', rf_path='random_forest.pkl'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Load PyTorch model
-    checkpoint = torch.load(model_path, map_location=device)
-    model = SoilTextureModel(num_classes=checkpoint['num_classes'])
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model.class_names = checkpoint['class_names']
-    model.device = device
+    # Allow RandomForestClassifier to be loaded
+    add_safe_globals([RandomForestClassifier])
     
-    # Load Random Forest classifier
-    model.rf_classifier = joblib.load(rf_path)
-    
-    model.eval()
-    return model
-
+    try:
+        # Load PyTorch model with weights_only=False since we have custom objects
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+        
+        model = SoilTextureModel(num_classes=checkpoint['num_classes'])
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.class_names = checkpoint['class_names']
+        model.device = device
+        
+        # Load Random Forest classifier separately
+        model.rf_classifier = joblib.load(rf_path)
+        
+        model.eval()
+        return model
+    except Exception as e:
+        raise RuntimeError(f"Model loading failed: {str(e)}")
+        
+        
 # Transform remains the same
 transform = transforms.Compose([
     transforms.Resize((100, 100)),
