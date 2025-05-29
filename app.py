@@ -3345,7 +3345,7 @@ async def predict_crop(data: CropInput):
 @app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
     try:
-        # Input validation
+        # 1. Input Validation
         if not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="File must be an image")
         
@@ -3353,22 +3353,29 @@ async def predict_texture(file: UploadFile = File(...)):
         if len(contents) == 0:
             raise HTTPException(status_code=400, detail="Empty file received")
 
-        # Image processing
+        # 2. Image Processing
         try:
             image = Image.open(io.BytesIO(contents)).convert('RGB')
             tensor = transform(image).unsqueeze(0).to(soil_model.device)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
-        # Model validation
-        if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
-            raise HTTPException(status_code=500, detail="Model not properly initialized")
+        # 3. Model Validation
+        required_attrs = ['rf_classifier', 'class_names', 'num_classes']
+        if not all(hasattr(soil_model, attr) for attr in required_attrs):
+            raise HTTPException(
+                status_code=500,
+                detail="Model missing required attributes"
+            )
         
-        # Verify model has expected attributes
-        if not hasattr(soil_model.rf_classifier, 'classes_'):
-            raise HTTPException(status_code=500, detail="Model classifier not properly initialized")
+        # 4. Verify Model Consistency
+        if len(soil_model.class_names) != soil_model.num_classes:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Model configuration mismatch: {len(soil_model.class_names)} classes vs {soil_model.num_classes} expected"
+            )
 
-        # Feature extraction
+        # 5. Feature Extraction
         with torch.no_grad():
             try:
                 _, _, features = soil_model(tensor)
@@ -3376,66 +3383,61 @@ async def predict_texture(file: UploadFile = File(...)):
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
-        # Prediction with bounds checking
+        # 6. Prediction with Validation
         try:
-            class_idx = soil_model.rf_classifier.predict(features)[0]
-            
-            # Verify predicted index is within bounds
-            if class_idx >= len(soil_model.class_names) or class_idx < 0:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Predicted class index {class_idx} is out of bounds for model with {len(soil_model.class_names)} classes"
-                )
-                
+            # Get probabilities and verify length
             probs = soil_model.rf_classifier.predict_proba(features)[0]
-            
-            # Verify probabilities match class names
             if len(probs) != len(soil_model.class_names):
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Probability array length {len(probs)} doesn't match class names length {len(soil_model.class_names)}"
-                )
+                # Handle case where RF was trained with different classes
+                rf_classes = soil_model.rf_classifier.classes_
+                valid_indices = [i for i, name in enumerate(soil_model.class_names) if name in rf_classes]
                 
-        except HTTPException:
-            raise
+                if not valid_indices:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No matching classes between model and classifier"
+                    )
+                
+                # Create aligned probabilities array
+                aligned_probs = np.zeros(len(soil_model.class_names))
+                for rf_idx, rf_class in enumerate(rf_classes):
+                    if rf_class in soil_model.class_names:
+                        model_idx = soil_model.class_names.index(rf_class)
+                        aligned_probs[model_idx] = probs[rf_idx]
+                
+                probs = aligned_probs
+            
+            class_idx = np.argmax(probs)
+            confidence = float(probs[class_idx])
+            class_name = soil_model.class_names[class_idx]
+            
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-        # Prepare response with additional safety checks
-        try:
-            class_name = soil_model.class_names[class_idx]
-            confidence = float(probs[class_idx])
-            
-            # Get texture info with fallback values
-            texture_info = SOIL_TEXTURE_INFO.get(class_name, {
-                'description': 'No description available',
-                'properties': [],
-                'color': '#FFFFFF'
-            })
+        # 7. Build Response
+        texture_info = SOIL_TEXTURE_INFO.get(class_name, {
+            'description': 'No description available',
+            'properties': [],
+            'color': '#FFFFFF'
+        })
 
-            # Build complete response with bounds checking
-            all_confidences = {}
-            for i in range(len(soil_model.class_names)):
-                if i >= len(probs):
-                    break  # Safety check
-                all_confidences[soil_model.class_names[i]] = {
+        # Create confidence dictionary only for available classes
+        all_confidences = {}
+        for i, name in enumerate(soil_model.class_names):
+            if i < len(probs):  # Safety check
+                all_confidences[name] = {
                     "score": float(probs[i]),
-                    "color": SOIL_TEXTURE_INFO.get(soil_model.class_names[i], {}).get('color', '#FFFFFF')
+                    "color": SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF')
                 }
 
-            response = {
-                "predicted_class": class_name,
-                "confidence": confidence,
-                "description": texture_info['description'],
-                "properties": texture_info['properties'],
-                "color": texture_info['color'],
-                "all_confidences": all_confidences
-            }
-
-            return response
-            
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Response formatting failed: {str(e)}")
+        return {
+            "predicted_class": class_name,
+            "confidence": confidence,
+            "description": texture_info['description'],
+            "properties": texture_info['properties'],
+            "color": texture_info['color'],
+            "all_confidences": all_confidences
+        }
         
     except HTTPException:
         raise
