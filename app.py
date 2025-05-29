@@ -3361,18 +3361,36 @@ async def predict_texture(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
         # 3. Model Validation
-        required_attrs = ['rf_classifier', 'class_names', 'num_classes']
-        if not all(hasattr(soil_model, attr) for attr in required_attrs):
+        if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
+            raise HTTPException(status_code=500, detail="Model not properly initialized")
+        
+        # 4. Get RF classes and verify alignment
+        try:
+            rf_classes = soil_model.rf_classifier.classes_
+        except AttributeError:
             raise HTTPException(
                 status_code=500,
-                detail="Model missing required attributes"
+                detail="Random Forest classifier not properly initialized"
             )
         
-        # 4. Verify Model Consistency
-        if len(soil_model.class_names) != soil_model.num_classes:
+        # Create mapping between RF classes and model classes
+        class_mapping = []
+        for model_class in soil_model.class_names:
+            if model_class in rf_classes:
+                class_mapping.append(np.where(rf_classes == model_class)[0][0])
+            else:
+                class_mapping.append(-1)  # Mark as unavailable
+
+        if all(idx == -1 for idx in class_mapping):
+            available_rf_classes = ", ".join(rf_classes)
+            available_model_classes = ", ".join(soil_model.class_names)
             raise HTTPException(
                 status_code=500,
-                detail=f"Model configuration mismatch: {len(soil_model.class_names)} classes vs {soil_model.num_classes} expected"
+                detail=(
+                    f"Complete class mismatch between model and classifier.\n"
+                    f"Model classes: {available_model_classes}\n"
+                    f"RF classes: {available_rf_classes}"
+                )
             )
 
         # 5. Feature Extraction
@@ -3383,32 +3401,22 @@ async def predict_texture(file: UploadFile = File(...)):
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
-        # 6. Prediction with Validation
+        # 6. Prediction with Class Alignment
         try:
-            # Get probabilities and verify length
-            probs = soil_model.rf_classifier.predict_proba(features)[0]
-            if len(probs) != len(soil_model.class_names):
-                # Handle case where RF was trained with different classes
-                rf_classes = soil_model.rf_classifier.classes_
-                valid_indices = [i for i, name in enumerate(soil_model.class_names) if name in rf_classes]
-                
-                if not valid_indices:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="No matching classes between model and classifier"
-                    )
-                
-                # Create aligned probabilities array
-                aligned_probs = np.zeros(len(soil_model.class_names))
-                for rf_idx, rf_class in enumerate(rf_classes):
-                    if rf_class in soil_model.class_names:
-                        model_idx = soil_model.class_names.index(rf_class)
-                        aligned_probs[model_idx] = probs[rf_idx]
-                
-                probs = aligned_probs
+            # Get probabilities from RF
+            rf_probs = soil_model.rf_classifier.predict_proba(features)[0]
             
-            class_idx = np.argmax(probs)
-            confidence = float(probs[class_idx])
+            # Align probabilities with model classes
+            aligned_probs = np.zeros(len(soil_model.class_names))
+            for model_idx, rf_idx in enumerate(class_mapping):
+                if rf_idx != -1:
+                    aligned_probs[model_idx] = rf_probs[rf_idx]
+            
+            # Normalize probabilities in case some classes were missing
+            aligned_probs = aligned_probs / aligned_probs.sum()
+            
+            class_idx = np.argmax(aligned_probs)
+            confidence = float(aligned_probs[class_idx])
             class_name = soil_model.class_names[class_idx]
             
         except Exception as e:
@@ -3421,14 +3429,14 @@ async def predict_texture(file: UploadFile = File(...)):
             'color': '#FFFFFF'
         })
 
-        # Create confidence dictionary only for available classes
-        all_confidences = {}
-        for i, name in enumerate(soil_model.class_names):
-            if i < len(probs):  # Safety check
-                all_confidences[name] = {
-                    "score": float(probs[i]),
-                    "color": SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF')
-                }
+        # Create confidence dictionary
+        all_confidences = {
+            name: {
+                "score": float(aligned_probs[i]),
+                "color": SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF')
+            }
+            for i, name in enumerate(soil_model.class_names)
+        }
 
         return {
             "predicted_class": class_name,
@@ -3444,7 +3452,6 @@ async def predict_texture(file: UploadFile = File(...)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-        
         
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
