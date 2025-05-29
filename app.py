@@ -3345,8 +3345,7 @@ async def predict_crop(data: CropInput):
 # Then modify your predict_texture endpoint like this:
 @app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
+
     
     try:
         # Read and process image
