@@ -3345,42 +3345,45 @@ async def predict_crop(data: CropInput):
 @app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
     try:
+        # Input validation
         if not file.content_type.startswith('image/'):
-            raise HTTPException(400, "File must be an image")
+            raise HTTPException(status_code=400, detail="File must be an image")
         
         contents = await file.read()
         if len(contents) == 0:
-            raise HTTPException(400, "Empty file received")
+            raise HTTPException(status_code=400, detail="Empty file received")
 
+        # Image processing
         try:
             image = Image.open(io.BytesIO(contents)).convert('RGB')
             tensor = transform(image).unsqueeze(0).to(soil_model.device)
         except Exception as e:
-            raise HTTPException(400, f"Image processing failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
-        # Ensure we have a valid model
-        if not hasattr(soil_model, 'rf_classifier'):
-            raise HTTPException(500, "Model not properly initialized")
+        # Model validation
+        if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
+            raise HTTPException(status_code=500, detail="Model not properly initialized")
 
+        # Feature extraction
         with torch.no_grad():
-            _, _, features = soil_model(tensor)
-        
-        features = features.cpu().numpy()
-        
-        # Validate predictions exist
-        if not hasattr(soil_model, 'class_names'):
-            raise HTTPException(500, "Model missing class names")
+            try:
+                _, _, features = soil_model(tensor)
+                features = features.cpu().numpy()
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
+        # Prediction
         try:
             class_idx = soil_model.rf_classifier.predict(features)[0]
             probs = soil_model.rf_classifier.predict_proba(features)[0]
         except Exception as e:
-            raise HTTPException(500, f"Prediction failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
+        # Prepare response
         class_name = soil_model.class_names[class_idx]
         confidence = float(probs[class_idx])
         
-        # Ensure we have texture info
+        # Get texture info with fallback values
         texture_info = SOIL_TEXTURE_INFO.get(class_name, {
             'description': 'No description available',
             'properties': [],
@@ -3408,7 +3411,7 @@ async def predict_texture(file: UploadFile = File(...)):
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
         
         
         
