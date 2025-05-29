@@ -39,7 +39,7 @@ def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load saved checkpoint
-    checkpoint = torch.load('soil_model_state_dict.pth', map_location=device)
+    checkpoint = torch.load('soil_model_state_dict.pth', map_location=device, weights_only=False)
     
     # Initialize model
     model = SoilTextureModel(num_classes=checkpoint['num_classes'])
