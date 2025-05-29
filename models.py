@@ -23,8 +23,8 @@ class SoilTextureModel(nn.Module):
         self.rf_features = nn.Linear(128, 64)
         self.classifier = nn.Linear(128, num_classes)
         self.device = torch.device("cpu")
-        self.rf_classifier = None  # Placeholder for Random Forest
-        self.class_names = []  # Placeholder for class names
+        self.rf_classifier = None
+        self.class_names = []
 
     def forward(self, x):
         features = self.resnet(x)
@@ -37,28 +37,28 @@ class SoilTextureModel(nn.Module):
 def load_soil_model(model_path='soil_model_state_dict.pth', rf_path='random_forest.pkl'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Allow RandomForestClassifier to be loaded
-    add_safe_globals([RandomForestClassifier])
-    
     try:
-        # Load PyTorch model with weights_only=False since we have custom objects
+        # Solution 1: Use weights_only=False (simpler, but only if you trust the source)
         checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+        
+        # Alternative Solution 2: If you want to use weights_only=True
+        # with torch.serialization.safe_load_context([RandomForestClassifier]):
+        #     checkpoint = torch.load(model_path, map_location=device, weights_only=True)
         
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])
         model.class_names = checkpoint['class_names']
         model.device = device
         
-        # Load Random Forest classifier separately
+        # Load Random Forest separately
         model.rf_classifier = joblib.load(rf_path)
         
         model.eval()
         return model
     except Exception as e:
         raise RuntimeError(f"Model loading failed: {str(e)}")
-        
-        
-# Transform remains the same
+
+# Image transformation
 transform = transforms.Compose([
     transforms.Resize((100, 100)),
     transforms.ToTensor(),
