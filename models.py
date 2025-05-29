@@ -36,7 +36,7 @@ class SoilTextureModel(nn.Module):
 
 def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = torch.load('complete_soil_model_resnet_noAUG.pth', map_location=device)
+    model = torch.load('complete_soil_model_resnet_noAUG.pth', map_location=device, weights_only=False)
     model.eval()
     return model
 
