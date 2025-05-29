@@ -16,7 +16,7 @@ import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
 from models import load_model, transform
 from schemas import PredictionResponse
-
+from models import SoilTextureModel
 
 # Load model at startup
 model = load_model()
