@@ -3,6 +3,7 @@ import os
 import tempfile 
 import pandas as pd
 import sklearn
+import torch
 from pydantic import BaseModel
 import joblib  # for RandomForest model loading
 import numpy as np
@@ -14,12 +15,14 @@ from tensorflow.keras.models import load_model
 import traceback
 import io
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess_input
-from models import load_model, transform
+from models import load_soil_model, transform
 from schemas import PredictionResponse
 from models import SoilTextureModel
+from tensorflow.keras.models import load_model  # TensorFlow's load_model
 
-# Load model at startup
-model = load_model()
+# Initialize models at startup
+soil_model = load_soil_model()
+
 
 # For patching if needed
 try:
@@ -2988,7 +2991,7 @@ scaler = joblib.load("scaler.pkl")
 
 class MunsellClassifier:
     def __init__(self, model_path):
-        self.model = load_model(model_path)
+        self.model = tf.keras.models.load_model(model_path)
        
         # Verify the actual input shape from the model
         self.input_shape = self.model.input_shape[1:3]  # Gets (height, width)
