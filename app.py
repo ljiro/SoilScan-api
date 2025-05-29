@@ -3363,6 +3363,10 @@ async def predict_texture(file: UploadFile = File(...)):
         # Model validation
         if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
             raise HTTPException(status_code=500, detail="Model not properly initialized")
+        
+        # Verify model has expected attributes
+        if not hasattr(soil_model.rf_classifier, 'classes_'):
+            raise HTTPException(status_code=500, detail="Model classifier not properly initialized")
 
         # Feature extraction
         with torch.no_grad():
@@ -3372,47 +3376,72 @@ async def predict_texture(file: UploadFile = File(...)):
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
-        # Prediction
+        # Prediction with bounds checking
         try:
             class_idx = soil_model.rf_classifier.predict(features)[0]
+            
+            # Verify predicted index is within bounds
+            if class_idx >= len(soil_model.class_names) or class_idx < 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Predicted class index {class_idx} is out of bounds for model with {len(soil_model.class_names)} classes"
+                )
+                
             probs = soil_model.rf_classifier.predict_proba(features)[0]
+            
+            # Verify probabilities match class names
+            if len(probs) != len(soil_model.class_names):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Probability array length {len(probs)} doesn't match class names length {len(soil_model.class_names)}"
+                )
+                
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-        # Prepare response
-        class_name = soil_model.class_names[class_idx]
-        confidence = float(probs[class_idx])
-        
-        # Get texture info with fallback values
-        texture_info = SOIL_TEXTURE_INFO.get(class_name, {
-            'description': 'No description available',
-            'properties': [],
-            'color': '#FFFFFF'
-        })
+        # Prepare response with additional safety checks
+        try:
+            class_name = soil_model.class_names[class_idx]
+            confidence = float(probs[class_idx])
+            
+            # Get texture info with fallback values
+            texture_info = SOIL_TEXTURE_INFO.get(class_name, {
+                'description': 'No description available',
+                'properties': [],
+                'color': '#FFFFFF'
+            })
 
-        # Build complete response
-        response = {
-            "predicted_class": class_name,
-            "confidence": confidence,
-            "description": texture_info['description'],
-            "properties": texture_info['properties'],
-            "color": texture_info['color'],
-            "all_confidences": {
-                soil_model.class_names[i]: {
+            # Build complete response with bounds checking
+            all_confidences = {}
+            for i in range(len(soil_model.class_names)):
+                if i >= len(probs):
+                    break  # Safety check
+                all_confidences[soil_model.class_names[i]] = {
                     "score": float(probs[i]),
                     "color": SOIL_TEXTURE_INFO.get(soil_model.class_names[i], {}).get('color', '#FFFFFF')
-                } for i in range(len(soil_model.class_names))
-            }
-        }
+                }
 
-        return response
+            response = {
+                "predicted_class": class_name,
+                "confidence": confidence,
+                "description": texture_info['description'],
+                "properties": texture_info['properties'],
+                "color": texture_info['color'],
+                "all_confidences": all_confidences
+            }
+
+            return response
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Response formatting failed: {str(e)}")
         
     except HTTPException:
         raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-        
         
         
 @app.post("/predict")

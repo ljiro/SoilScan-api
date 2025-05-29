@@ -38,26 +38,29 @@ def load_soil_model(model_path='soil_model_state_dict.pth', rf_path='random_fore
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     try:
-        # Solution 1: Use weights_only=False (simpler, but only if you trust the source)
+        # Load PyTorch model
         checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-        
-        # Alternative Solution 2: If you want to use weights_only=True
-        # with torch.serialization.safe_load_context([RandomForestClassifier]):
-        #     checkpoint = torch.load(model_path, map_location=device, weights_only=True)
         
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])
         model.class_names = checkpoint['class_names']
         model.device = device
         
-        # Load Random Forest separately
+        # Verify class names match num_classes
+        if len(model.class_names) != model.num_classes:
+            raise ValueError(
+                f"Class names length ({len(model.class_names)}) "
+                f"doesn't match num_classes ({model.num_classes})"
+            )
+        
+        # Load Random Forest
         model.rf_classifier = joblib.load(rf_path)
         
         model.eval()
         return model
     except Exception as e:
         raise RuntimeError(f"Model loading failed: {str(e)}")
-
+        
 # Image transformation
 transform = transforms.Compose([
     transforms.Resize((100, 100)),
