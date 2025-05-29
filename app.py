@@ -3342,47 +3342,42 @@ async def predict_crop(data: CropInput):
         }
       
         
-# Then modify your predict_texture endpoint like this:
 @app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
+    # Validate file
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Expected image, got {file.content_type}"
+        )
 
-    
     try:
-        # Read and process image
+        # Verify file is not empty
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert('RGB')
-        tensor = transform(image).unsqueeze(0).to(model.device)
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Empty file received")
+
+        # Verify image can be opened
+        try:
+            image = Image.open(io.BytesIO(contents)).convert('RGB')
+        except Exception as img_error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image file: {str(img_error)}"
+            )
+
+        # Rest of your processing...
         
-        # Predict
-        with torch.no_grad():
-            _, _, features = model(tensor)
-        features = features.cpu().numpy()
-        
-        # Get predictions
-        class_idx = model.rf_classifier.predict(features)[0]
-        class_name = model.class_names[class_idx]
-        probs = model.rf_classifier.predict_proba(features)[0]
-        confidence = float(probs[class_idx])
-        
-        # Get additional info from our dictionary
-        texture_info = SOIL_TEXTURE_INFO.get(class_name, {})
-        
-        return {
-            "predicted_class": class_name,
-            "confidence": confidence,
-            "description": texture_info.get('description', 'No description available'),
-            "properties": texture_info.get('properties', []),
-            "color": texture_info.get('color', '#FFFFFF'),
-            "all_confidences": {
-                model.class_names[i]: {
-                    "score": float(probs[i]),
-                    "color": SOIL_TEXTURE_INFO.get(model.class_names[i], {}).get('color', '#FFFFFF')
-                } for i in range(len(model.class_names))
-            }
-        }
-        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Prediction error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during processing"
+        )
+        
+        
         
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
