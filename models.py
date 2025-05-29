@@ -40,8 +40,9 @@ def load_soil_model(model_path='soil_model_state_dict.pth'):
     return model
 
 # Preprocessing transform for PyTorch
+# Update your transform in models.py to match expected input shape
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((100, 100)),  # Match model's expected input
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
