@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
+from sklearn.ensemble import RandomForestClassifier
+import joblib
 
 class SoilTextureModel(nn.Module):
     def __init__(self, num_classes):
@@ -20,7 +22,9 @@ class SoilTextureModel(nn.Module):
         )
         self.rf_features = nn.Linear(128, 64)
         self.classifier = nn.Linear(128, num_classes)
-        self.device = torch.device("cpu")  # Initialize with default devices
+        self.device = torch.device("cpu")
+        self.rf_classifier = None  # Placeholder for Random Forest
+        self.class_names = []  # Placeholder for class names
 
     def forward(self, x):
         features = self.resnet(x)
@@ -30,25 +34,25 @@ class SoilTextureModel(nn.Module):
         out = self.classifier(features)
         return out, None, rf_feats
 
-def load_soil_model(model_path='soil_model_state_dict.pth'):
+def load_soil_model(model_path='soil_model_state_dict.pth', rf_path='random_forest.pkl'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-    
+    # Load PyTorch model
+    checkpoint = torch.load(model_path, map_location=device)
     model = SoilTextureModel(num_classes=checkpoint['num_classes'])
     model.load_state_dict(checkpoint['model_state_dict'])
     model.class_names = checkpoint['class_names']
-    
-    # Add device attribute to the model
     model.device = device
+    
+    # Load Random Forest classifier
+    model.rf_classifier = joblib.load(rf_path)
     
     model.eval()
     return model
 
-# Preprocessing transform for PyTorch
-# Update your transform in models.py to match expected input shape
+# Transform remains the same
 transform = transforms.Compose([
-    transforms.Resize((100, 100)),  # Match model's expected input
+    transforms.Resize((100, 100)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
