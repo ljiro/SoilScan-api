@@ -34,7 +34,7 @@ class SoilTextureModel(nn.Module):
         out = self.classifier(features)
         return out, None, rf_feats
 
-def load_soil_model(model_path='soil_model_state_dict.pth', rf_path='random_forest.pkl'):
+def load_soil_model(model_path='soil_model_state_dict_v4.pth', rf_path='random_forest_v4.pkl'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     try:
