@@ -24,7 +24,7 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     try:
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])
         model.class_names = [str(c).strip() for c in checkpoint['class_names']]
