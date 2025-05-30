@@ -19,7 +19,7 @@ from models import load_soil_model, transform
 from schemas import PredictionResponse
 from models import SoilTextureModel
 from tensorflow.keras.models import load_model  # TensorFlow's load_model
-
+from typing import Dict  # Add this import
 # Initialize models at startup
 soil_model = load_soil_model()
 
@@ -3341,14 +3341,14 @@ async def predict_crop(data: CropInput):
             "traceback": traceback.format_exc()
         }
       
-class PredictionResponse(Dict):
+class PredictionResponse(BaseModel):
     predicted_class: str
     confidence: float
     description: str
     properties: list
     color: str
     all_confidences: dict
-
+        
 @app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
     try:
