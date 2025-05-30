@@ -53,6 +53,7 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth', rf_path='random_f
                 f"doesn't match num_classes ({model.num_classes})"
             )
         
+        print("class names: ", model.class_names)
         # Load Random Forest
         model.rf_classifier = joblib.load(rf_path)
         
