@@ -3370,7 +3370,7 @@ async def predict_texture(file: UploadFile = File(...)):
         # 3. Model Prediction
         with torch.no_grad():
             try:
-                outputs, _, _ = soil_model(tensor)
+                outputs = soil_model(tensor)
                 probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
