@@ -3366,6 +3366,10 @@ async def predict_texture(file: UploadFile = File(...)):
         try:
             image = Image.open(io.BytesIO(contents)).convert('RGB')
             tensor = transform(image).unsqueeze(0).to(soil_model.device)
+            
+            # Debug print tensor shape
+            print(f"Input tensor shape: {tensor.shape}")  # Should be [1, 3, 224, 224]
+            
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
@@ -3374,6 +3378,10 @@ async def predict_texture(file: UploadFile = File(...)):
             try:
                 outputs = soil_model(tensor)
                 probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
+                
+                # Debug print outputs shape
+                print(f"Model outputs shape: {outputs.shape}")
+                
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
