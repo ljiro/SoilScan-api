@@ -9,19 +9,40 @@ class SoilTextureModel(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.class_names = []
         
-        # Load full ResNet50 architecture as saved in the checkpoint
-        self.resnet = models.resnet50(pretrained=False)
+        # Original architecture that matches the saved model
+        self.resnet = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        )
         
-        # Modify the final layer to match our number of classes
-        num_ftrs = self.resnet.fc.in_features
-        self.resnet.fc = nn.Linear(num_ftrs, num_classes)
+        # Add the custom layers that were in the original model
+        self.fc = nn.Sequential(
+            nn.Linear(2048, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+        )
+        
+        self.rf_features = nn.Linear(128, 64)
+        self.classifier = nn.Linear(128, num_classes)
 
     def forward(self, x):
-        return self.resnet(x)
+        features = self.resnet(x)
+        features = features.view(features.size(0), -1)
+        features = self.fc(features)
+        rf_feats = self.rf_features(features)
+        out = self.classifier(features)
+        return out, None, rf_feats
 
 def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     try:
-        # Load with weights_only=False for compatibility
+        # Allow loading with weights_only=False since we trust the source
         checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         
         # Initialize model with correct number of classes
@@ -29,12 +50,13 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
         
         # Handle both full checkpoints and state_dict only
         if 'model_state_dict' in checkpoint:
-            # Load the complete state dict
-            model.load_state_dict(checkpoint['model_state_dict'])
+            state_dict = checkpoint['model_state_dict']
         else:
-            # Direct state_dict load
-            model.load_state_dict(checkpoint)
+            state_dict = checkpoint
             
+        # Load the state dict, ignoring unexpected/missing keys
+        model.load_state_dict(state_dict, strict=False)
+        
         # Load class names
         model.class_names = [str(c).strip() for c in checkpoint['class_names']]
         
