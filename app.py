@@ -3360,38 +3360,32 @@ async def predict_texture(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
-        # 3. Model Validation
+        # 3. Model Validation and Type Conversion
         if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
             raise HTTPException(status_code=500, detail="Model not properly initialized")
         
-        # Convert RF classes to strings if they aren't already
+        # Convert all class names to strings
         try:
-            rf_classes = [str(cls) for cls in soil_model.rf_classifier.classes_]
-            model_classes = [str(cls) for cls in soil_model.class_names]
+            model_classes = [str(c) for c in soil_model.class_names]
+            rf_classes = [str(c) for c in soil_model.rf_classifier.classes_]
         except Exception as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Class name conversion failed: {str(e)}"
             )
 
-        # 4. Create class mapping with proper string types
+        # 4. Create class mapping
         class_mapping = []
         for model_class in model_classes:
             if model_class in rf_classes:
                 class_mapping.append(rf_classes.index(model_class))
             else:
-                class_mapping.append(-1)  # Mark as unavailable
+                class_mapping.append(-1)
 
         if all(idx == -1 for idx in class_mapping):
-            available_rf_classes = ", ".join(rf_classes)
-            available_model_classes = ", ".join(model_classes)
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"Complete class mismatch between model and classifier.\n"
-                    f"Model classes: {available_model_classes}\n"
-                    f"RF classes: {available_rf_classes}"
-                )
+                detail="No matching classes between model and classifier"
             )
 
         # 5. Feature Extraction
@@ -3402,7 +3396,7 @@ async def predict_texture(file: UploadFile = File(...)):
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
-        # 6. Prediction with Type Safety
+        # 6. Prediction
         try:
             rf_probs = soil_model.rf_classifier.predict_proba(features)[0]
             
@@ -3412,8 +3406,7 @@ async def predict_texture(file: UploadFile = File(...)):
                 if rf_idx != -1:
                     aligned_probs[model_idx] = rf_probs[rf_idx]
             
-            # Normalize probabilities
-            aligned_probs /= aligned_probs.sum()
+            aligned_probs /= aligned_probs.sum()  # Normalize
             
             class_idx = np.argmax(aligned_probs)
             confidence = float(aligned_probs[class_idx])
@@ -3422,30 +3415,30 @@ async def predict_texture(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-        # 7. Build Response with Type-Checked Values
+        # 7. Build Response with Type-Safe Values
         texture_info = SOIL_TEXTURE_INFO.get(class_name, {
             'description': 'No description available',
             'properties': [],
             'color': '#FFFFFF'
         })
 
-        # Ensure all values are JSON-serializable
-        all_confidences = {
-            str(name): {  # Ensure key is string
-                "score": float(aligned_probs[i]),  # Ensure float
-                "color": str(SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF'))  # Ensure string
-            }
-            for i, name in enumerate(model_classes)
-        }
-
-        return {
+        # Convert all values to JSON-serializable types
+        response = {
             "predicted_class": str(class_name),
             "confidence": float(confidence),
             "description": str(texture_info['description']),
-            "properties": [str(p) for p in texture_info['properties']],  # Ensure strings
+            "properties": [str(p) for p in texture_info['properties']],
             "color": str(texture_info['color']),
-            "all_confidences": all_confidences
+            "all_confidences": {
+                str(name): {
+                    "score": float(aligned_probs[i]),
+                    "color": str(SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF'))
+                }
+                for i, name in enumerate(model_classes)
+            }
         }
+
+        return response
         
     except HTTPException:
         raise
