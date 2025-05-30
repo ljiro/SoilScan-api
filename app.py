@@ -3360,28 +3360,11 @@ async def predict_texture(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
-        # 3. Model Validation
+        # 3. Verify Model and Classifier
         if not hasattr(soil_model, 'rf_classifier') or not hasattr(soil_model, 'class_names'):
             raise HTTPException(status_code=500, detail="Model not properly initialized")
-        
-        # 4. Ensure class alignment
-        try:
-            # Convert all to strings and sort consistently
-            model_classes = sorted([str(c) for c in soil_model.class_names])
-            rf_classes = sorted([str(c) for c in soil_model.rf_classifier.classes_])
-            
-            # Check if classes match
-            if model_classes != rf_classes:
-                raise ValueError(
-                    f"Class mismatch between model ({model_classes}) and RF ({rf_classes})"
-                )
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Class alignment failed: {str(e)}"
-            )
 
-        # 5. Feature Extraction
+        # 4. Feature Extraction
         with torch.no_grad():
             try:
                 _, _, features = soil_model(tensor)
@@ -3389,25 +3372,54 @@ async def predict_texture(file: UploadFile = File(...)):
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
 
-        # 6. Prediction
+        # 5. Handle Class Mapping and Prediction
         try:
-            # Get probabilities for all classes
+            # Get probabilities from RF classifier
             rf_probs = soil_model.rf_classifier.predict_proba(features)[0]
             
-            # Get top prediction
-            class_idx = np.argmax(rf_probs)
-            confidence = float(rf_probs[class_idx])
-            class_name = str(model_classes[class_idx])
+            # Initialize aligned probabilities array
+            aligned_probs = np.zeros(len(soil_model.class_names))
             
+            # Case 1: RF uses numeric classes (0-9) and model uses text classes
+            if hasattr(soil_model, 'class_mapping') and soil_model.class_mapping:
+                for rf_idx, prob in enumerate(rf_probs):
+                    if rf_idx in soil_model.class_mapping:
+                        model_idx = soil_model.rf_to_model_mapping.get(rf_idx, -1)
+                        if model_idx != -1:
+                            aligned_probs[model_idx] = prob
+            # Case 2: Direct 1:1 mapping (same classes in same order)
+            else:
+                if len(rf_probs) == len(soil_model.class_names):
+                    aligned_probs = rf_probs
+                else:
+                    raise ValueError("Class count mismatch with no mapping available")
+
+            # Normalize probabilities
+            aligned_probs /= aligned_probs.sum()
+            
+            # Get top prediction
+            class_idx = np.argmax(aligned_probs)
+            confidence = float(aligned_probs[class_idx])
+            class_name = str(soil_model.class_names[class_idx]).strip()
+
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-        # 7. Build Response
+        # 6. Build Response
         texture_info = SOIL_TEXTURE_INFO.get(class_name, {
             'description': 'No description available',
             'properties': [],
             'color': '#FFFFFF'
         })
+
+        # Prepare all confidences
+        all_confidences = {}
+        for i, name in enumerate(soil_model.class_names):
+            clean_name = str(name).strip()
+            all_confidences[clean_name] = {
+                "score": float(aligned_probs[i]),
+                "color": str(SOIL_TEXTURE_INFO.get(clean_name, {}).get('color', '#FFFFFF'))
+            }
 
         response = {
             "predicted_class": class_name,
@@ -3415,13 +3427,7 @@ async def predict_texture(file: UploadFile = File(...)):
             "description": str(texture_info['description']),
             "properties": [str(p) for p in texture_info['properties']],
             "color": str(texture_info['color']),
-            "all_confidences": {
-                str(name): {
-                    "score": float(rf_probs[i]),
-                    "color": str(SOIL_TEXTURE_INFO.get(name, {}).get('color', '#FFFFFF'))
-                }
-                for i, name in enumerate(model_classes)
-            }
+            "all_confidences": all_confidences
         }
 
         return response
@@ -3431,6 +3437,8 @@ async def predict_texture(file: UploadFile = File(...)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        
+        
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
     try:
