@@ -38,24 +38,26 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth', rf_path='random_f
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     try:
-        # Load PyTorch model
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-        
+        checkpoint = torch.load(model_path, map_location=device)
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])
-        model.class_names = checkpoint['class_names']
-        model.device = device
+        model.class_names = [str(c).strip() for c in checkpoint['class_names']]  # Clean whitespace
         
-        # Verify class names match num_classes
-        if len(model.class_names) != model.num_classes:
-            raise ValueError(
-                f"Class names length ({len(model.class_names)}) "
-                f"doesn't match num_classes ({model.num_classes})"
-            )
-        
-        print("class names: ", model.class_names)
-        # Load Random Forest
+        # Load RF classifier
         model.rf_classifier = joblib.load(rf_path)
+        
+        # Create mapping between RF numeric classes and model class names
+        if hasattr(model.rf_classifier, 'classes_'):
+            rf_classes = [str(c).strip() for c in model.rf_classifier.classes_]
+            
+            # If RF uses numeric classes (0-9) and we have text classes
+            if all(c.isdigit() for c in rf_classes) and not any(c.isdigit() for c in model.class_names):
+                # Create 1:1 mapping assuming same number of classes
+                if len(rf_classes) == len(model.class_names):
+                    model.class_mapping = {int(num): name for num, name in zip(rf_classes, model.class_names)}
+                    model.rf_to_model_mapping = {i: i for i in range(len(rf_classes))}
+                else:
+                    raise ValueError("Class count mismatch between numeric RF and text model classes")
         
         model.eval()
         return model
