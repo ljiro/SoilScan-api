@@ -38,3 +38,5 @@ complete_soil_model_resnet.pth filter=lfs diff=lfs merge=lfs -text
 complete_soil_model_resnet_noAUG.pth filter=lfs diff=lfs merge=lfs -text
 soil_model_state_dict_pth filter=lfs diff=lfs merge=lfs -text
 random_forest.pkl filter=lfs diff=lfs merge=lfs -text
+soil_model_state_dict_v4.pth filter=lfs diff=lfs merge=lfs -text
+random_forest_v4.pkl filter=lfs diff=lfs merge=lfs -text
