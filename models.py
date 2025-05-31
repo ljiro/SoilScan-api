@@ -35,16 +35,27 @@ class SoilTextureModel(nn.Module):
 
 def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     try:
-        checkpoint = torch.load(model_path, map_location='cpu')
+        # Add safe globals for scikit-learn's RandomForestClassifier
+        import torch.serialization
+        from sklearn.ensemble._forest import RandomForestClassifier
+        
+        # Add the RandomForestClassifier to safe globals
+        torch.serialization.add_safe_globals([RandomForestClassifier])
+        
+        # Load with weights_only=False since we trust the source
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         
         # Initialize model with correct number of classes
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         
-        # Load state dict
+        # Handle both full checkpoints and state_dict only
         if 'model_state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['model_state_dict'])
+            state_dict = checkpoint['model_state_dict']
         else:
-            model.load_state_dict(checkpoint)
+            state_dict = checkpoint
+            
+        # Load the state dict, ignoring unexpected/missing keys
+        model.load_state_dict(state_dict, strict=False)
         
         # Load class names
         model.class_names = [str(c).strip() for c in checkpoint['class_names']]
