@@ -1,45 +1,31 @@
 import torch
 import torch.nn as nn
-from torchvision import models, transforms
-from sklearn.ensemble import RandomForestClassifier
-import joblib
+from torchvision import models
 
 class SoilTextureModel(nn.Module):
     def __init__(self, num_classes):
-        super().__init__()
+        super(SoilTextureModel, self).__init__()
         self.num_classes = num_classes
+        self.class_names = []
         
         # Load pre-trained ResNet50
-        self.resnet = models.resnet50(pretrained=False)
-        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])  # Remove original fc layer
+        self.base_model = models.resnet50(pretrained=True)
         
-        # Custom layers
-        self.fc = nn.Sequential(
-            nn.Linear(2048, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
+        # Freeze early layers
+        for param in list(self.base_model.parameters())[:-50]:
+            param.requires_grad = False
+
+        # Replace the final fully connected layer
+        num_features = self.base_model.fc.in_features
+        self.base_model.fc = nn.Sequential(
             nn.Dropout(0.5),
-            nn.Linear(256, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Linear(num_features, num_classes)
         )
-        
-        self.rf_features = nn.Linear(128, 64)
-        self.classifier = nn.Linear(128, num_classes)
-        self.rf_classifier = RandomForestClassifier(n_estimators=100)
-        self.class_names = []
-        self.class_to_idx = {}
 
     def forward(self, x):
-        features = self.resnet(x)
-        features = features.view(features.size(0), -1)
-        features = self.fc(features)
-        rf_feats = self.rf_features(features)
-        out = self.classifier(features)
-        return out, None, rf_feats
+        return self.base_model(x)
 
-def load_soil_model(model_path='soil_model_state_dict_v5.pth'):
+def load_soil_model(model_path='soil_texture_classifier.pth'):
     try:
         # Load the checkpoint
         checkpoint = torch.load(model_path, map_location='cpu')
@@ -52,8 +38,6 @@ def load_soil_model(model_path='soil_model_state_dict_v5.pth'):
         
         # Load additional components
         model.class_names = checkpoint['class_names']
-        model.class_to_idx = checkpoint['class_to_idx']
-        model.rf_classifier = checkpoint['rf_classifier']
         
         # Set to evaluation mode
         model.eval()

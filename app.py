@@ -3352,78 +3352,57 @@ class PredictionResponse(BaseModel):
     all_confidences: dict
         
 @app.post("/predict_texture", response_model=PredictionResponse)
+@app.post("/predict_texture", response_model=PredictionResponse)
 async def predict_texture(file: UploadFile = File(...)):
+    """Classify soil texture from an image"""
     try:
-        # 1. Input Validation
+        # Validate input
         if not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="File must be an image")
         
+        # Process image
         contents = await file.read()
-        if len(contents) == 0:
-            raise HTTPException(status_code=400, detail="Empty file received")
-
-        # 2. Image Processing
-        try:
-            image = Image.open(io.BytesIO(contents)).convert('RGB')
-            tensor = transform(image).unsqueeze(0).to(soil_model.device)
-            
-            # Debug print tensor shape
-            print(f"Input tensor shape: {tensor.shape}")  # Should be [1, 3, 224, 224]
-            
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
-
-        # 3. Model Prediction
+        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        tensor = transform(image).unsqueeze(0).to(soil_model.device)
+        
+        # Predict
         with torch.no_grad():
-            try:
-                outputs = soil_model(tensor)
-                probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
-                
-                # Debug print outputs shape
-                print(f"Model outputs shape: {outputs.shape}")
-                
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
-        # 4. Process Results
+            outputs = soil_model(tensor)
+            probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
+        
+        # Prepare response
         class_idx = np.argmax(probs)
         confidence = float(probs[class_idx])
         class_name = str(soil_model.class_names[class_idx]).strip()
-
-        # 5. Build Response
+        
         texture_info = SOIL_TEXTURE_INFO.get(class_name, {
             'description': 'No description available',
             'properties': [],
             'color': '#FFFFFF'
         })
-
-        # Prepare all confidences
-        all_confidences = {}
-        for i, name in enumerate(soil_model.class_names):
-            clean_name = str(name).strip()
-            all_confidences[clean_name] = {
+        
+        all_confidences = {
+            str(name).strip(): {
                 "score": float(probs[i]),
-                "color": str(SOIL_TEXTURE_INFO.get(clean_name, {}).get('color', '#FFFFFF'))
-            }
-
-        response = {
-            "predicted_class": class_name,
-            "confidence": confidence,
-            "description": str(texture_info['description']),
-            "properties": [str(p) for p in texture_info['properties']],
-            "color": str(texture_info['color']),
-            "all_confidences": all_confidences
+                "color": str(SOIL_TEXTURE_INFO.get(str(name).strip(), {}).get('color', '#FFFFFF')
+            } 
+            for i, name in enumerate(soil_model.class_names)
         }
         
-        print("response: ", response)
-
-        return response
+        return {
+            "predicted_class": class_name,
+            "confidence": confidence,
+            "description": texture_info['description'],
+            "properties": texture_info['properties'],
+            "color": texture_info['color'],
+            "all_confidences": all_confidences
+        }
         
     except HTTPException:
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
         
         
 
