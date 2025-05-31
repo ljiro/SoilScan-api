@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms  # Fixed import here
 from PIL import Image
-
+import os
 
 # Set cache directory to a writable location
 os.environ['TORCH_HOME'] = '/tmp/torch_cache'  # or '/app/cache'
