@@ -3384,7 +3384,7 @@ async def predict_texture(file: UploadFile = File(...)):
         all_confidences = {
             str(name).strip(): {
                 "score": float(probs[i]),
-                "color": str(SOIL_TEXTURE_INFO.get(str(name).strip(), {}).get('color', '#FFFFFF')
+                "color": str(SOIL_TEXTURE_INFO.get(str(name).strip(), {}).get('color', '#FFFFFF'))
             } for i, name in enumerate(soil_model.class_names)
         }
         
