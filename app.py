@@ -3414,6 +3414,8 @@ async def predict_texture(file: UploadFile = File(...)):
             "color": str(texture_info['color']),
             "all_confidences": all_confidences
         }
+        
+        print("response: ", response)
 
         return response
         
