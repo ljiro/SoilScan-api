@@ -55,7 +55,7 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
             state_dict = checkpoint
             
         # Load the state dict, ignoring unexpected/missing keys
-        model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(state_dict, strict=True)
         
         # Load class names
         model.class_names = [str(c).strip() for c in checkpoint['class_names']]
