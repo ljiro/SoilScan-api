@@ -9,56 +9,40 @@ class SoilTextureModel(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.class_names = []
         
-        # Modified architecture with proper feature extraction
-        self.feature_extractor = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            
-            # Additional layers to reduce dimensions
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            
-            nn.AdaptiveAvgPool2d((1, 1))  # This will output [batch, 256, 1, 1]
-        )
+        # Use ResNet50 architecture to match training
+        self.resnet = models.resnet50(pretrained=False)
+        num_features = self.resnet.fc.in_features
+        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])  # Remove final FC layer
         
-        # Modified classifier head
+        # Custom classifier head to match training
         self.classifier = nn.Sequential(
-            nn.Linear(256, 128),  # Matches the 256 features from AdaptiveAvgPool
-            nn.BatchNorm1d(128),
+            nn.Linear(num_features, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.5),
-            
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(128, num_classes)
-        )
-
+        
     def forward(self, x):
-        features = self.feature_extractor(x)
-        features = features.view(features.size(0), -1)  # Flatten to [batch, 256]
-        out = self.classifier(features)
-        return out
-def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
+        features = self.resnet(x)
+        features = features.view(features.size(0), -1)
+        return self.classifier(features)
+
+def load_soil_model(model_path='soil_model_state_dict_v5.pth'):
     try:
-        # Allow loading with weights_only=False since we trust the source
-        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+        checkpoint = torch.load(model_path, map_location='cpu')
         
         # Initialize model with correct number of classes
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
         
-        # Handle both full checkpoints and state_dict only
+        # Load state dict
         if 'model_state_dict' in checkpoint:
-            state_dict = checkpoint['model_state_dict']
+            model.load_state_dict(checkpoint['model_state_dict'])
         else:
-            state_dict = checkpoint
-            
-        # Load the state dict, ignoring unexpected/missing keys
-        model.load_state_dict(state_dict, strict=False)
+            model.load_state_dict(checkpoint)
         
         # Load class names
         model.class_names = [str(c).strip() for c in checkpoint['class_names']]
@@ -70,9 +54,9 @@ def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     except Exception as e:
         raise RuntimeError(f"Model loading failed: {str(e)}")
 
-# Image transformation
+# Image transformation (must match training)
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # Fixed size for consistent input
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
