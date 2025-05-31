@@ -3426,6 +3426,26 @@ async def predict_texture(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
         
         
+
+@app.post("/debug_predict")
+async def debug_predict(file: UploadFile = File(...)):
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents)).convert('RGB')
+    
+    # Save the received image for inspection
+    debug_path = "debug_image.jpg"
+    image.save(debug_path)
+    print(f"Saved received image to {debug_path}")
+    
+    tensor = transform(image).unsqueeze(0).to(soil_model.device)
+    with torch.no_grad():
+        outputs = soil_model(tensor)
+        print(f"Raw outputs: {outputs.cpu().numpy()}")
+        probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
+        print(f"Probabilities: {probs}")
+    
+    return {"message": "Check server logs for debug info"}
+        
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
     try:
