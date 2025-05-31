@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
-from torchvision import models
-python
-from torchvision import transforms
+from torchvision import models, transforms  # Fixed import here
+from PIL import Image
 
 class SoilTextureModel(nn.Module):
     def __init__(self, num_classes):
         super(SoilTextureModel, self).__init__()
         self.num_classes = num_classes
         self.class_names = []
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Load pre-trained ResNet50
         self.base_model = models.resnet50(pretrained=True)
@@ -22,7 +22,8 @@ class SoilTextureModel(nn.Module):
         self.base_model.fc = nn.Sequential(
             nn.Dropout(0.5),
             nn.Linear(num_features, num_classes)
-        )
+        
+        self.to(self.device)
 
     def forward(self, x):
         return self.base_model(x)
@@ -30,7 +31,7 @@ class SoilTextureModel(nn.Module):
 def load_soil_model(model_path='soil_texture_classifier.pth'):
     try:
         # Load the checkpoint
-        checkpoint = torch.load(model_path, map_location='cpu', weights_only=Falsegit )
+        checkpoint = torch.load(model_path, map_location='cpu')
         
         # Initialize model
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
@@ -43,7 +44,7 @@ def load_soil_model(model_path='soil_texture_classifier.pth'):
         
         # Set to evaluation mode
         model.eval()
-        model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        model.to(model.device)
         
         return model
         
