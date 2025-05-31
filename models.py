@@ -3,6 +3,7 @@ import torch.nn as nn
 from torchvision import models, transforms  # Fixed import here
 from PIL import Image
 
+# yes 
 class SoilTextureModel(nn.Module):
     def __init__(self, num_classes):
         super(SoilTextureModel, self).__init__()
