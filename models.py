@@ -22,7 +22,7 @@ class SoilTextureModel(nn.Module):
         num_features = self.base_model.fc.in_features
         self.base_model.fc = nn.Sequential(
             nn.Dropout(0.5),
-            nn.Linear(num_features, num_classes)
+            nn.Linear(num_features, num_classes))
         
         self.to(self.device)
 
