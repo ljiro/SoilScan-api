@@ -43,7 +43,7 @@ class SoilTextureModel(nn.Module):
         out = self.classifier(features)
         return out
     
-def load_soil_model(model_path='soil_model_state_dict_v5.pth'):
+def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     try:
         checkpoint = torch.load(model_path, map_location='cpu')
         
