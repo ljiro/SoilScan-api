@@ -3,6 +3,11 @@ import torch.nn as nn
 from torchvision import models, transforms  # Fixed import here
 from PIL import Image
 
+
+# Set cache directory to a writable location
+os.environ['TORCH_HOME'] = '/tmp/torch_cache'  # or '/app/cache'
+os.makedirs(os.environ['TORCH_HOME'], exist_ok=True)
+
 # yes 
 class SoilTextureModel(nn.Module):
     def __init__(self, num_classes):
