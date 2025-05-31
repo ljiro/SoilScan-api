@@ -45,7 +45,7 @@ class SoilTextureModel(nn.Module):
     
 def load_soil_model(model_path='soil_model_state_dict_v4.pth'):
     try:
-        checkpoint = torch.load(model_path, map_location='cpu')
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         
         # Initialize model with correct number of classes
         model = SoilTextureModel(num_classes=checkpoint['num_classes'])
