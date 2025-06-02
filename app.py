@@ -20,6 +20,9 @@ from schemas import PredictionResponse
 from models import SoilTextureModel
 from tensorflow.keras.models import load_model  # TensorFlow's load_model
 from typing import Dict  # Add this import
+import pickle
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
 # Initialize models at startup
 soil_model = load_soil_model()
 
@@ -38,6 +41,31 @@ class CropInput(BaseModel):
     humidity: float
     ph: float
     rainfall: float
+        
+class FertilizerRequest(BaseModel):
+    Temperature: float
+    Humidity: float
+    Moisture: float
+    Soil_Type: str
+    Crop_Type: str
+    Nitrogen: float
+    Potassium: float
+    Phosphorous: float
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "Temperature": 25,
+                "Humidity": 60,
+                "Moisture": 25,
+                "Soil_Type": "Loamy",
+                "Crop_Type": "Maize",
+                "Nitrogen": 20,
+                "Potassium": 30,
+                "Phosphorous": 15
+            }
+        }
+
     
 # Munsell Color Reference Data
 MUNSELL_COLORS = {
@@ -2989,6 +3017,19 @@ rf_model = joblib.load("random_forest_model.pkl")
 xgb_model = joblib.load("xgboost_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
+# Load the trained model and preprocessing objects
+try:
+    with open('ExtraTreesClassifier_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+except Exception as e:
+    raise RuntimeError(f"Failed to load model: {str(e)}")
+    
+    
+    # Soil and crop types from the training data
+soil_types = ['Black', 'Clayey', 'Loamy', 'Red', 'Sandy']
+crop_types = ['Barley', 'Cotton', 'Ground Nuts', 'Maize', 'Millets', 
+              'Oil seeds', 'Paddy', 'Pulses', 'Sugarcane', 'Tobacco', 'Wheat']
+
 class MunsellClassifier:
     def __init__(self, model_path):
         self.model = tf.keras.models.load_model(model_path)
@@ -3405,24 +3446,53 @@ async def predict_texture(file: UploadFile = File(...)):
         
         
 
-@app.post("/debug_predict")
-async def debug_predict(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents)).convert('RGB')
+@app.post("/predict_fertilizer")
+async def predict_fertilizer(request: FertilizerRequest):
+    try:
+        # Validate soil and crop types
+        if request.Soil_Type not in soil_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid Soil Type. Must be one of: {', '.join(soil_types)}"
+            )
+        
+        if request.Crop_Type not in crop_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid Crop Type. Must be one of: {', '.join(crop_types)}"
+            )
+
+        # Create a DataFrame from the input
+        input_data = pd.DataFrame([{
+            'Temparature': request.Temperature,
+            'Humidity ': request.Humidity,
+            'Moisture': request.Moisture,
+            'Soil Type': request.Soil_Type,
+            'Crop Type': request.Crop_Type,
+            'Nitrogen': request.Nitrogen,
+            'Potassium': request.Potassium,
+            'Phosphorous': request.Phosphorous
+        }])
+
+        # One-hot encode categorical features (same as during training)
+        ct = ColumnTransformer(
+            transformers=[('encoder', OneHotEncoder(), ['Soil Type', 'Crop Type'])], 
+            remainder='passthrough'
+        )
+        X_encoded = ct.fit_transform(input_data)
+
+        # Scale the features (using the same scaler as during training)
+        sc = StandardScaler()
+        X_scaled = sc.fit_transform(X_encoded)
+
+        # Make prediction
+        prediction = model.predict(X_scaled)
+        
+        return {"recommended_fertilizer": prediction[0]}
     
-    # Save the received image for inspection
-    debug_path = "debug_image.jpg"
-    image.save(debug_path)
-    print(f"Saved received image to {debug_path}")
-    
-    tensor = transform(image).unsqueeze(0).to(soil_model.device)
-    with torch.no_grad():
-        outputs = soil_model(tensor)
-        print(f"Raw outputs: {outputs.cpu().numpy()}")
-        probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
-        print(f"Probabilities: {probs}")
-    
-    return {"message": "Check server logs for debug info"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
         
 @app.post("/predict")
 async def predict_image(file: UploadFile = File(...)):
