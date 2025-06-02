@@ -225,6 +225,12 @@ else:
 
     
 
+<<<<<<< HEAD
+=======
+# ✅ Instantiate classifier
+classifier = MunsellClassifier("munsell_classifier.keras")
+
+>>>>>>> 6bad4602f6178d06342110dc15f5109d8bcb0f72
 # ✅ Create FastAPI app
 app = FastAPI()
 
