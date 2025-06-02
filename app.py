@@ -22,7 +22,7 @@ from tensorflow.keras.models import load_model  # TensorFlow's load_model
 from typing import Dict  # Add this import
 import pickle
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-
+from sklearn.compose import ColumnTransformer
 # Initialize models at startup
 soil_model = load_soil_model()
 
