@@ -373,9 +373,11 @@ async def predict_fertilizer(request: FertilizerRequest):
         # Make prediction
         prediction = model.predict(X_scaled)
         
+        
         return {"recommended_fertilizer": prediction[0]}
     
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
         
