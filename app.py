@@ -144,6 +144,8 @@ crop_types = ['Barley', 'Cotton', 'Ground Nuts', 'Maize', 'Millets',
               'Oil seeds', 'Paddy', 'Pulses', 'Sugarcane', 'Tobacco', 'Wheat']
 
 
+ct = joblib.load('preprocessor_v1.pkl')
+sc = joblib.load('scaler_v1.pkl')
 
 
 
@@ -331,6 +333,7 @@ async def predict_texture(file: UploadFile = File(...)):
         
         
 
+
 @app.post("/predict_fertilizer")
 async def predict_fertilizer(request: FertilizerRequest):
     try:
@@ -350,7 +353,7 @@ async def predict_fertilizer(request: FertilizerRequest):
         # Create a DataFrame from the input
         input_data = pd.DataFrame([{
             'Temparature': request.Temperature,
-            'Humidity ': request.Humidity,
+            'Humidity': request.Humidity,  # Fixed: Removed extra space
             'Moisture': request.Moisture,
             'Soil Type': request.Soil_Type,
             'Crop Type': request.Crop_Type,
@@ -359,25 +362,17 @@ async def predict_fertilizer(request: FertilizerRequest):
             'Phosphorous': request.Phosphorous
         }])
 
-        # One-hot encode categorical features (same as during training)
-        ct = ColumnTransformer(
-            transformers=[('encoder', OneHotEncoder(), ['Soil Type', 'Crop Type'])], 
-            remainder='passthrough'
-        )
-        X_encoded = ct.fit_transform(input_data)
-
-        # Scale the features (using the same scaler as during training)
-        sc = StandardScaler()
-        X_scaled = sc.fit_transform(X_encoded)
+        # Apply the same preprocessing as during training
+        X_encoded = ct.transform(input_data)
+        X_scaled = sc.transform(X_encoded)
 
         # Make prediction
         prediction = model.predict(X_scaled)
         
-        
         return {"recommended_fertilizer": prediction[0]}
     
     except Exception as e:
-        print(e)
+        print(f"Error during prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
         
