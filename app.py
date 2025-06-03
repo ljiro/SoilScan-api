@@ -353,7 +353,7 @@ async def predict_fertilizer(request: FertilizerRequest):
         # Create a DataFrame from the input
         input_data = pd.DataFrame([{
             'Temparature': request.Temperature,
-            'Humidity': request.Humidity,  # Fixed: Removed extra space
+            'Humidity ': request.Humidity,  # Fixed: Removed extra space
             'Moisture': request.Moisture,
             'Soil Type': request.Soil_Type,
             'Crop Type': request.Crop_Type,
