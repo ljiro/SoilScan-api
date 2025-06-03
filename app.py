@@ -144,8 +144,8 @@ crop_types = ['Barley', 'Cotton', 'Ground Nuts', 'Maize', 'Millets',
               'Oil seeds', 'Paddy', 'Pulses', 'Sugarcane', 'Tobacco', 'Wheat']
 
 
-ct = joblib.load('preprocessor_v1.pkl')
-sc = joblib.load('scaler_v1.pkl')
+ct = joblib.load('column_transformer_v1.pkl')
+sc = joblib.load('standard_scaler_v1.pkl')
 
 
 
