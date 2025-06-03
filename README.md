@@ -4,7 +4,7 @@ This repository contains a minimal Python backend (using FastAPI) that exposes A
 
 
 ##### 🔧 Features
-- Receives payloads from a client react app and returns Texture predictions and Fertilizer recommendations.
+- Receives payloads from a client-side react application and returns Texture predictions and Fertilizer recommendations
   
 - Setup in a Docker container for fast deployment and scaling
 
